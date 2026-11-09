@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    >
+    <meta name="theme-color" content="#12274c">
+    <title>Sniper Rush — Arena</title>
+    <meta
+      name="description"
+      content="A fast-respawn, one-shot browser sniper arena. Join free for all or invite your friends to a private room."
+    >
+    <link rel="icon" href="assets/logo.svg">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="game.css">
+    <link rel="stylesheet" href="game-ui.css">
+  </head>
+  <body>
+    <main id="lobby" aria-label="Sniper Rush lobby">
+      <div class="bay" aria-hidden="true"></div><canvas
+        id="stage"
+        aria-hidden="true"
+      ></canvas><canvas id="live-bay" hidden></canvas><div class="bay-light">
+      </div>
+      <img class="game-logo" src="assets/logo.svg" alt="Sniper Rush">
+      <section class="player-ui">
+        <button class="profile" data-action="profile">
+          <img id="avatar" alt="Your character"><span
+            class="xp-info"
+          ><strong id="alias">RushSniper</strong><span class="xp"><i
+                id="xp-fill"
+              ></i><b id="xp-text">0 / 1,000 XP</b></span></span><span
+            class="lv"
+          >LV.<b id="level">1</b></span>
+        </button>
+        <div class="wallet">
+          <button data-action="wallet" aria-label="Coins and daily reward">
+            <span class="coin"></span><b id="coins">0</b><i>+</i>
+          </button>
+          <span class="wallet-gems" aria-label="Gems">
+            <span data-icon="gem"></span><b id="gems">0</b>
+          </span>
+        </div>
+        <nav class="side-nav" aria-label="Operator">
+          <button data-action="loadout">
+            <span data-icon="rifle"></span>Loadout
+          </button>
+          <button data-action="inventory">
+            <span data-icon="bag"></span>Inventory
+          </button>
+          <button data-action="tasks" class="tasks-nav">
+            <span data-icon="tasks"></span>Daily challenges
+          </button>
+        </nav>
+      </section>
+      <aside class="shop-panel">
+        <button class="shop-title" data-action="shop">
+          <span data-icon="cart"></span>Shop
+        </button>
+      </aside>
+      <aside class="reward-dock" aria-label="Free rewards">
+        <button data-action="wheel" class="wheel-launch"><span class="mini-wheel" aria-hidden="true"></span><strong>SPIN WHEEL</strong><small id="wheel-ready">FREE SPIN</small></button>
+      </aside>
+      <section class="dispatch">
+        <div class="tabs" role="tablist" aria-label="Lobby feed">
+          <button role="tab" aria-selected="true" data-tab="updates">
+            <span data-icon="news"></span>Updates
+          </button>
+          <button role="tab" aria-selected="false" data-tab="friends">
+            <span data-icon="friends"></span>Friends
+          </button>
+        </div>
+        <!-- Keep newest major shipped features here when releasing game updates. -->
+        <div id="updates" role="tabpanel" tabindex="0" aria-label="Latest game updates">
+          <button class="news-row" data-action="social"><span class="news-symbol" data-icon="target"></span><span><strong>Capture the Flag</strong><small>Private teams · first to 3</small></span><b class="new-tag">NEW</b></button>
+          <button class="news-row" data-action="social"><span class="news-symbol" data-icon="rifle"></span><span><strong>Arms Race</strong><small>Private rooms · advance rifles</small></span></button>
+          <button class="news-row" data-action="tasks"><span class="news-symbol" data-icon="target"></span><span><strong>Precision Weekend</strong><small>2× elimination XP · 13–16 Nov UTC</small></span><b class="new-tag" data-event-status="precision-weekend-1">UPCOMING</b></button>
+          <button class="news-row" data-action="season"><span class="news-symbol" data-icon="medal"></span><span><strong>Season rewards</strong><small>Frontier Vanguard · season rewards</small></span><span data-icon="arrow"></span></button>
+          <button class="news-row" data-action="online"><span class="news-symbol" data-icon="target"></span><span><strong>Choose your arena</strong><small>Clean arena previews · live votes</small></span><span data-icon="arrow"></span></button>
+          <button class="news-row" data-action="online"><span class="news-symbol" data-icon="friends"></span><span><strong>Live matchmaking lobby</strong><small>Player portraits · live roster</small></span><span data-icon="arrow"></span></button>
+          <button class="news-row" data-action="online"><span class="news-symbol" data-icon="target"></span><span><strong>Training compound</strong><small>Practice targets before the match</small></span><span data-icon="arrow"></span></button>
+          <button class="news-row" data-action="online"><span class="news-symbol" data-icon="friends"></span><span><strong>15-player matchmaking</strong><small>Real players · map voting</small></span><span data-icon="arrow"></span></button>
+          <button class="news-row" data-action="clothing">
+            <span class="news-symbol" data-icon="shirt"></span><span><strong>New animated gear</strong><small>8 costumes · 8 headgears · 8 shoes</small></span><b class="new-tag">NEW</b>
+          </button>
+          <button class="news-row" data-action="skins">
+            <span class="news-symbol" data-icon="medal"></span><span><strong>Mastery Gold re-forged</strong><small>Golden aura · earn or unlock</small></span><span data-icon="arrow"></span>
+          </button>
+          <button class="news-row" data-action="friends">
+            <span class="news-symbol" data-icon="friends"></span><span><strong>Find your friends</strong><small>Player IDs &amp; friend requests</small></span><span data-icon="arrow"></span>
+          </button>
+          <button class="news-row" data-challenge-period="weekly">
+            <span class="news-symbol" data-icon="medal"></span><span><strong>Weekly challenges</strong><small>Earn coins, gems &amp; XP</small></span><span data-icon="arrow"></span>
+          </button>
+          <button class="news-row" data-action="skins">
+            <img src="assets/rifle.png" alt=""><span><strong>40 signature rifle skins</strong><small>5 per rifle · animated effects</small></span><span data-icon="arrow"></span>
+          </button>
+          <button class="news-row" data-action="wheel">
+            <span class="news-symbol" data-icon="coin"></span><span><strong>More ways to spin</strong><small>Free rewards &amp; extra gem spins</small></span><span data-icon="arrow"></span>
+          </button>
+          <button class="news-row" data-action="social">
+            <span class="news-symbol" data-icon="target"></span><span><strong>Your duel, your rules</strong><small>Time limit or target points</small></span><span data-icon="arrow"></span>
+          </button>
+          <button class="news-row" data-action="maps">
+            <img src="assets/yard.jpg" alt=""><span><strong>Explore the arenas</strong><small>Practice across 4 maps</small></span><span data-icon="arrow"></span>
+          </button>
+        </div>
+        <div id="friends" role="tabpanel" hidden>
+          <strong>Friends</strong><p>Connecting your friends list…</p>
+        </div>
+      </section>
+      <div class="play-actions">
+        <button class="cta online" data-action="online">
+          <span data-icon="play"></span><strong>Play online</strong><i
+            data-icon="target"
+          ></i>
+        </button>
+        <button class="cta social" data-action="social">
+          <span data-icon="friends"></span><strong>Play with friends</strong>
+        </button>
+      </div>
+      <nav class="utility" aria-label="Lobby tools">
+        <button data-action="settings" title="Settings">
+          <span data-icon="gear"></span>Settings
+        </button>
+        <button data-action="controls" title="Keyboard and mouse controls">
+          <span data-icon="controller"></span>Controls
+        </button><a
+          class="platform-link"
+          href="https://www.crazygames.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Visit CrazyGames"
+        ><img src="assets/crazygames.svg" alt="CrazyGames"></a>
+      </nav>
+    </main>
+    <div id="game" hidden></div>
+    <dialog id="modal" aria-labelledby="dialog-title">
+      <div class="modal-head">
+        <h1 id="dialog-title"></h1>
+        <button data-action="close" aria-label="Back to lobby">
+          <span data-icon="close"></span>
+        </button>
+      </div>
+      <div id="modal-content"></div>
+      <div class="game-menu-footer">
+        <span id="menu-prompt"></span><span>SNIPER RUSH</span>
+      </div>
+    </dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="boot">
+      <img src="assets/logo.svg" alt="Sniper Rush"><b id="progress"
+      >Loading arena</b><progress max="100" value="0"></progress><span>One shot.
+        One elimination.</span>
+    </div>
+    <script type="module" src="menu.js"></script>
+  </body>
+</html>

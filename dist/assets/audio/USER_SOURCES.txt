@@ -1,0 +1,71 @@
+USER-SUPPLIED COMBAT SOUNDS
+Downloaded 5 November 2026 from links supplied by the user.
+Upstream game recordings are not labeled CC0 by this project.
+Playback windows and mixing are in dist/combat-audio.js.
+The reload-and-shot playback excludes the later gunshot.
+
+user-elimination.mp3 (added 6 November 2026)
+https://www.myinstants.com/en/instant/imposter-kill-among-us-22684/
+Audio: https://www.myinstants.com/media/sounds/stationary-kill_gDwMUvN.mp3
+SHA256: ef42d94eec1a80a23555263445e6f209391c5d994175136178c7ceb79f9e86ee
+
+user-heavy.mp3
+https://www.myinstants.com/en/instant/heavy-sniper-sound-6348/
+Audio: https://www.myinstants.com/media/sounds/heavy-sniper-sound.mp3
+SHA256: 61d5b780184fae4b97af545a9c882dcea166c0252459c82b8fbb03a5011e49fa
+
+user-awp.mp3
+https://www.myinstants.com/en/instant/csgo-awp-14800/
+Audio: https://www.myinstants.com/media/sounds/awp_02.mp3
+SHA256: d7b672f061bc7741b1b670c19f21cc20453bbe4069a280c59d15fd4c21044c33
+
+user-rifle.mp3
+https://www.myinstants.com/en/instant/gun-sniper-rifle-shot-41007/
+Audio: https://www.myinstants.com/media/sounds/gun-sniper-rifle-shot.mp3
+SHA256: c0c13f209b65c6f609570c4999277fc1f209f34aae80e458c252145df4264e90
+
+user-sniper.mp3
+https://www.myinstants.com/en/instant/sniper-rifle-sound-effect-86019/
+Audio: https://www.myinstants.com/media/sounds/sniper-rifle-sound-effect.mp3
+SHA256: 2b355972f7d6182fd39002109cec02af73bd4f6cdd7a9801f1a2367066a3d6fa
+
+user-reload-shot.mp3
+https://www.myinstants.com/en/instant/reload-and-shot-12564/
+Audio: https://www.myinstants.com/media/sounds/reload-and-shot.mp3
+SHA256: 263ece15061d5874307831eaf8d72218210abbd44d965141e7a6915b23968dd2
+
+user-pump-reload.mp3
+https://www.myinstants.com/en/instant/shotgun-pump-reload-36773/
+Audio: https://www.myinstants.com/media/sounds/12g-pumpfull.mp3
+SHA256: c6bce92d0a799a02f58478d9d9126ff5295695b703f43cdc38a626dd2fa838a7
+
+user-pumping.mp3
+https://www.myinstants.com/en/instant/shotgun-pumping-68263/
+Audio: https://www.myinstants.com/media/sounds/shotgun-pumping.mp3
+SHA256: 2c3d0612963d67c5f496409805f2c8458d7e03aae1875dd73d9b09d5a795f9e2
+
+
+user-grenade-pin.mp3
+https://www.myinstants.com/en/instant/grenade-pin-42628/
+Audio: https://www.myinstants.com/media/sounds/grenade-pin.mp3
+SHA256: 84197a08bbff30fca147bc559d7b2ed92397a2165198f1a24a7f2e68efbc12d2
+
+user-grenade-blast.mp3
+https://www.myinstants.com/en/instant/grenade-explosion-31516/
+Audio: https://www.myinstants.com/media/sounds/grenade-explosion.mp3
+SHA256: 23d2a9efae4fb560616db1641e7a1ebe5a8f732619e8e468058b6837d757c521
+
+user-knife-stab.mp3
+https://www.myinstants.com/en/instant/knife-stab-63455/
+Audio: https://www.myinstants.com/media/sounds/knife-stab.mp3
+SHA256: bfac023661fd8d31ef2a7bab1c84d261a8f66b0cfe7279d0a884bf8ec21c1abe
+
+user-footsteps.mp3
+https://www.myinstants.com/en/instant/minecraft-walking-on-grass-80865/
+Audio: https://www.myinstants.com/media/sounds/minecraft-walking-on-grass.mp3
+SHA256: 25609033b45d3d4463c190bb8652092e7507a8158265d392bd4407320be0d179
+
+user-finale.mp3
+https://www.myinstants.com/en/instant/sigma-25200/
+Audio: https://www.myinstants.com/media/sounds/sigma.mp3
+SHA256: 2f968e3b63e85bd6963f2a54d708ca324acd0b91e708b78bef1290955029d22d

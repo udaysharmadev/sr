@@ -1,0 +1,1 @@
+Actual screenshots captured through browser QA from the playable Sniper Rush game, 6 November 2026. Crosswind uses the earlier same-layout ground capture; other arenas use the new reference-hybrid layouts. These are not generated map concepts. Full screenshots are retained; the map cards crop them with CSS.

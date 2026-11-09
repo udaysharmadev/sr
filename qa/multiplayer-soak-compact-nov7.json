@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-07T17:55:04.236Z",
+  "scope": "localhost API clients; memory authority; injected client receive jitter and discarded acknowledgements; no native rendering/WAN benchmark",
+  "durationSeconds": 45.1,
+  "clients": 15,
+  "requests": 6808,
+  "busyResponses": 0,
+  "discardedAcknowledgements": 60,
+  "eventGaps": 0,
+  "responseBytes": 34389493,
+  "rttMs": {
+    "p50": 3.12,
+    "p95": 7.55,
+    "p99": 10.34,
+    "max": 19.08
+  },
+  "finalPhase": "live",
+  "acceptedLiveShots": 284,
+  "verdict": "PASS",
+  "cleanedClients": 15
+}

@@ -1,0 +1,15 @@
+# Sniper Rush earning and unlock rules — 9 November
+
+Implemented local rules, subject to real match retention/balance testing. Coins and gems are in-game balances; no cash-out or real-money purchase system is implemented.
+
+- M24 starter. AWM10,000; Barrett18,000; SVD28,000; TRG42 40,000; Scout55,000; SRS75,000; M200100,000 coins. Existing equipped rifle remains owned. All purchases and equip checks are server authoritative. Rifle accuracy stays exact at screen center; later rifles have calmer, faster settling visual recoil without random spread or altered1500ms chamber.
+- Public elimination25coins/100XP. Practice/private rooms grant no career/currency. Daily gift200coins, one free coin spin/day. Daily challenges add900coins/40gems total when earned. Weekly150kills,50headshots,5wins together add13,000coins/100gems. Goals count verified public results, persist across sessions, credit automatically once; weeks reset Monday00:00UTC.
+- Daily wheel250/500/750/1000/1500/2000/3000/10000coins, each12.5%. Expected value2375coins/spin, not a promised reward. Extra daily-wheel spin25gems; no real-money payment. Weekly golden wheel remains free once per7days and cannot be purchased. Paid coin spins cannot yield gems, so there is no spin-to-gem loop. Prize and cost commit before animation; reload cannot reroll or pay twice.
+- Gem exchange offers a guaranteed alternative:10→1000coins,50→6000,100→14000. Extra spins offer variance at lower average value per gem than the larger guaranteed packs. Display odds and cost next to action.
+- Three permanent wraps2500/4500/7000coins; purchase once and apply to owned rifles. Mastery Gold unlocks free at500kills/100headshots/50,000weaponXP, or costs75,000coins separately for each owned rifle. Purchased Gold changes cosmetics only. Existing costume/headgear/footwear collections remain available.
+
+Pacing: at20kills/day plus daily gift/free spin, expected3075coins/day before earned challenges. First10k rifle approximately3–4active days on expectation; rare wheel jackpot can shorten this. Full326k rifle collection is a long-term goal, weekly challenges accelerate active players. Do not tune from this estimate alone: measure purchase timing, win/kill distribution, wallet inflation and new-player drop-off with actual matches before release.
+
+Inspiration reviewed: [Clash Royale daily battle rewards](https://support.supercell.com/clash-royale/en/articles/daily-battle-rewards-3.html) links play to recurring rewards; [Fortnite quest guidance](https://www.epicgames.com/help/c-34254770/c-33726977/how-to-complete-fortnite-quests-a23969068) uses clear tasks with XP/cosmetic rewards. Those patterns inform short daily objectives, longer weekly milestones and explicit rewards; Sniper Rush values above are our own design.
+
+Remaining content: more genuinely different costume/accessory/weapon meshes and authored premium sound variants. No claim that three textured wraps constitutes an expanded character wardrobe. Native browser/physical aim/audio verification remains open while browser control is disabled.

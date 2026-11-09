@@ -1,0 +1,14 @@
+{
+  "name": "sniper-rush",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test backend/*.test.mjs",
+    "test:multiplayer": "node scripts/multiplayer-soak.mjs",
+    "build": "node build-worker.mjs"
+  },
+  "engines": {"node": ">=22.13"},
+  "main": "app.js"
+}
