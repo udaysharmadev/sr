@@ -14,18 +14,22 @@ export function listenMouseButtons(
     onDown(event);
   }, { signal });
   releaseTarget.addEventListener("mouseup", (event) => {
-    held.delete(event.button);
-    onUp(event);
+    if (held.delete(event.button)) onUp(event);
   }, { signal });
   const cancel = () => {
     if (!held.size) return;
+    const buttons = [...held];
     held.clear();
-    onCancel();
+    onCancel(buttons);
   };
   // Some browsers miss mouseup when released outside the window. Cancel the
   // abandoned gesture; synthesizing mouseup could accidentally throw a grenade.
   releaseTarget.addEventListener("mousemove", (event) => {
-    if (Number.isInteger(event.buttons) && [...held].some(button => masks[button] && !(event.buttons & masks[button]))) cancel();
+    if (!Number.isInteger(event.buttons)) return;
+    const missing = [...held].filter(button => masks[button] && !(event.buttons & masks[button]));
+    if (!missing.length) return;
+    for (const button of missing) held.delete(button);
+    onCancel(missing);
   }, { signal });
   releaseTarget.addEventListener("blur", cancel, { signal });
 }

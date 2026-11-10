@@ -60,7 +60,7 @@ const profile = load("sr.profile.v1", {
   claimed: false,
 });
 const settings = load("sr.settings.v1", {
-  quality: "high",
+  quality: "balanced",
   sensitivity: 1,
   adsSensitivity: .55,
   volume: .65,

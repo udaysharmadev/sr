@@ -22,14 +22,17 @@ test('fast equipment switches cannot reset the knife recovery or a sniper chambe
   command(r,a.token,{type:'equip',equipment:'rifle'},at+100);command(r,a.token,{type:'equip',equipment:'knife'},at+150);command(r,a.token,{type:'melee',seq:2,yaw:0,pitch:0},at+200);assert.equal(q.health,50);assert.equal(p.reloadUntil,reload);
   command(r,a.token,{type:'melee',seq:3,yaw:0,pitch:0},at+580);assert.equal(q.alive,false);
 });
-test('missed window releases cancel abandoned mouse chords once without generating a grenade throw',()=>{
+test('missed releases cancel only abandoned buttons and preserve a held scope',()=>{
   const canvas=new EventTarget(),window=new EventTarget(),abort=new AbortController();let down=0,up=0,cancels=0;
-  listenMouseButtons(canvas,window,()=>down++,()=>up++,abort.signal,()=>cancels++);
+  const cancelled=[];
+  listenMouseButtons(canvas,window,()=>down++,()=>up++,abort.signal,buttons=>{cancels++;cancelled.push(buttons);});
   const send=(target,type,button,buttons)=>{const event=new Event(type);Object.assign(event,{button,buttons});target.dispatchEvent(event);};
   send(canvas,'mousedown',2,2);send(canvas,'mousedown',0,3);send(window,'mousemove',0,3);assert.equal(cancels,0);
-  send(window,'mousemove',0,2);assert.equal(cancels,1);assert.equal(up,0,'lost release cancels rather than throws');send(window,'mousemove',0,0);assert.equal(cancels,1);
+  send(window,'mousemove',0,2);assert.equal(cancels,1);assert.deepEqual(cancelled,[[0]]);assert.equal(up,0,'lost release cancels rather than throws');
+  send(window,'mousemove',0,2);assert.equal(cancels,1,'held RMB is retained');
+  send(window,'mousemove',0,0);assert.equal(cancels,2);assert.deepEqual(cancelled[1],[2]);
   send(canvas,'mousedown',0,1);send(window,'mouseup',0,0);assert.equal(up,1,'normal release still throws');
-  send(canvas,'mousedown',0,1);window.dispatchEvent(new Event('blur'));assert.equal(cancels,2);send(window,'mousemove',0,0);assert.equal(cancels,2);
+  send(canvas,'mousedown',0,1);window.dispatchEvent(new Event('blur'));assert.equal(cancels,3);send(window,'mousemove',0,0);assert.equal(cancels,3);
   abort.abort();send(canvas,'mousedown',0,1);send(window,'mouseup',0,0);assert.equal(down,4);assert.equal(up,1);
 });
 test('throw guide follows the shared bounced fuse position, refreshes at most every80ms and reuses its meshes',()=>{

@@ -24,6 +24,7 @@ import { MAPS, TRAINING_MAP } from "./maps.js";
 import { listenMouseButtons } from "./mouse-input.js";
 import { movePlayer, resetPlayerMotion, smoothCameraHeight, clampCameraEyeY } from "./movement.js";
 import { keyLabel, resolveBindings } from "./input-bindings.js";
+import { queueMovementFrame, takeRecentMovementFrames } from './input-queue.js';
 import { BADGES } from "./progression.js";
 import { animateOperator, animateOperatorCombat, buildArena, operator, rifle, setOperatorWeapon } from "./arena.js";
 
@@ -164,6 +165,7 @@ export function startGame(
     wasLocked = document.pointerLockElement === container,
     denied = false,
     scoped = false,
+    rightButtonHeld = false,
     last = now(),
     frame = 0,
     lastHUD = 0,
@@ -383,11 +385,12 @@ export function startGame(
     const respawn = me.alive && (!lastAlive || hadState && me.life !== p.life);
     if (lastAlive && !me.alive) { resetInput(); combatAudio?.cancelChamber(); }
     lastAlive = me.alive;
+    const recovering = needsResync && hadState && !respawn && !newRound;
     const fresh = !hadState || respawn || newRound || needsResync;
     needsResync = false;
     retryAt = 0;
     if (fresh) {
-      resetInput(); meleeAt = throwAt = -Infinity; inspectAt = -3000;
+      resetInput(recovering); meleeAt = throwAt = -Infinity; inspectAt = -3000;
       hurtUntil = 0; blastAt = -Infinity;
       landedAt=-Infinity;landingSpeed=fallSpeed=bobAmount=0;
       seq = Math.max(seq, me.inputSeq || 0);
@@ -397,12 +400,14 @@ export function startGame(
       grenadeStock = me.grenades ?? 1; autoRifleAt = Infinity; fireHeld = false;
       equipmentAt=now();stepDistance=stride=0;
       updateEquipmentHUD();
-      yaw = me.yaw || 0;
-      pitch = me.pitch || 0;
+      if (!recovering) {
+        yaw = me.yaw || 0;
+        pitch = me.pitch || 0;
+      }
       pending = [];
       frames = [];
       lean = 0;
-      scoped = false;
+      scoped = recovering && rightButtonHeld && selectedEquipment === 'rifle' && me.alive && !paused;
       reloadAt = 0;
       nextShot = 0;
       shotAt = -Infinity;
@@ -550,7 +555,7 @@ export function startGame(
     }
   }
   function takeInputBatch() {
-    const batch={seq:++seq,frames:frames.splice(0)};
+    const batch={seq:++seq,frames:takeRecentMovementFrames(frames)};
     if(batch.frames.length){pending.push(batch);if(pending.length>12)pending.shift();}
     return batch;
   }
@@ -564,7 +569,7 @@ export function startGame(
     if (isRetryable(error)) {
       needsResync = true;
       retryAt = now() + recoveryDelay(session?.failures || 1);
-      resetInput();
+      resetInput(true);
     }
     if (now() - errorAt > 1500) {
       errorAt = now();
@@ -841,12 +846,12 @@ export function startGame(
     if (session) { void command("throw", { seq: ++equipmentSeq, yaw, pitch, holdMs: charge * CHARGE_MS }); return; }
     localGrenades.push({ ...grenadeLaunch({ ...p, yaw, pitch }, charge, map), id: "practice:" + ++equipmentSeq });
   }
-  function resetInput() {
+  function resetInput(preserveKeys = false) {
     if (primeAt !== null && session) void command("cancelprime", {});
     if (primeAt !== null) combatAudio?.cancelPrime();
     primeAt = null; fireHeld = false; pendingKnifeAt = Infinity;
     inspectAt = -3000; lastMouseX = lastMouseY = null;
-    keys.clear();
+    if (!preserveKeys) { keys.clear(); rightButtonHeld = false; }
     lean = 0;
     jump =
       slide =
@@ -1104,12 +1109,21 @@ export function startGame(
     }
     if (e.button === 2 && selectedEquipment === "rifle") {
       inspectAt = -3000;
+      rightButtonHeld = true;
       scoped = true;
     }
   }, (e) => {
     if (e.button === 0) { fireHeld = false; throwGrenade(); }
-    if (e.button === 2) scoped = false;
-  }, signal, resetInput);
+    if (e.button === 2) { rightButtonHeld = false; scoped = false; }
+  }, signal, (buttons) => {
+    if (buttons.includes(0)) {
+      if (primeAt !== null && session) void command('cancelprime', {});
+      if (primeAt !== null) combatAudio?.cancelPrime();
+      primeAt = null;
+      fireHeld = false;
+    }
+    if (buttons.includes(2)) { rightButtonHeld = false; scoped = false; }
+  });
   handle(canvas, "mouseenter", () => {
     lastMouseX = lastMouseY = null;
   });
@@ -1118,7 +1132,7 @@ export function startGame(
   });
   handle(document, "mousemove", (e) => {
     if (spectating) return;
-    if (!(e.buttons & 2)) scoped = false;
+    if (!(e.buttons & 2)) { rightButtonHeld = false; scoped = false; }
     if (paused || (!locked && !denied) || (!locked && e.target !== canvas)) {
       return;
     }
@@ -1365,7 +1379,7 @@ export function startGame(
         movePlayer(p, input, dt, map);
         if(!wasGrounded&&p.grounded){landedAt=t;landingSpeed=fallSpeed;fallSpeed=0;}
         if(p.grounded)fallSpeed=0;
-        if (session && frames.length < 18) frames.push(input);
+        if (session) queueMovementFrame(frames, input);
       }
       jump = slide = false;
     }
