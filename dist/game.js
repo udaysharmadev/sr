@@ -1030,6 +1030,13 @@ export function startGame(
   handle(document, "pointerlockchange", () => {
     locked = document.pointerLockElement === container;
     if (locked) {
+      // A lock request may finish after Pause or Loadout was opened.
+      // Only an explicit resume action is allowed to close those menus.
+      if (paused || loadoutOpen) {
+        wasLocked = false;
+        document.exitPointerLock();
+        return;
+      }
       wasLocked = true;
       denied = false;
       setPaused(false);
