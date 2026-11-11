@@ -17,6 +17,7 @@ const modules = [
   "dist/equipment.js",
   "dist/maps.js",
   "dist/movement.js",
+  "dist/input-queue.js",
   "dist/snapshot-wire.js",
   "dist/progression.js",
   "dist/economy.js",

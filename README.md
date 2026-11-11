@@ -28,3 +28,5 @@ npm start
 ```
 
 Open `http://127.0.0.1:4173`. To run the test suite, use `npm test`.
+
+The Node application applies SQLite migrations on startup. For a Worker deployment with D1, apply the repository migrations through `drizzle/0005_room_invites.sql` before deploying this build.

@@ -10,13 +10,14 @@ export function relationshipFromList(playerId,state) {
   if(state.outgoing?.some(p=>p.playerId===playerId))return 'outgoing';
   return 'none';
 }
-export function mountFriends(panel,onIdentity=()=>{}) {
+export async function requestFriends(type,data={}) {
+  const response=await fetch('/api/social',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,...data}),signal:AbortSignal.timeout(8000)});
+  const value=await response.json();if(!response.ok)throw Error(value.error||'Friends unavailable');return value;
+}
+export function mountFriends(panel,onIdentity=()=>{},joinRoom=async()=>false) {
   let state=null,busy=false,refreshing=false,searching=false,found=null,error='',disposed=false,generation=0;
   const esc=socialEscape;
-  async function request(type,data={}) {
-    const response=await fetch('/api/social',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,...data}),signal:AbortSignal.timeout(8000)});
-    const value=await response.json();if(!response.ok)throw Error(value.error||'Friends unavailable');return value;
-  }
+  const request=requestFriends;
   const action=(label,type,id)=>'<button data-friend-action="'+type+'" data-player-id="'+esc(id)+'">'+label+'</button>';
   const row=(player,buttons='')=>'<li><span class="friend-presence '+(player.online?'online':'')+'"></span><div><b>'+esc(player.name)+'</b><small>ID '+esc(player.playerId)+'</small></div>'+buttons+'</li>';
   function render(){
@@ -30,6 +31,7 @@ export function mountFriends(panel,onIdentity=()=>{}) {
       '<p class="friend-status" role="status">'+esc(error)+'</p>'+
       (found?'<ul class="friend-list">'+row(found,friendSearchAction(found)==='ACCEPT'?action('ACCEPT','accept',found.playerId):friendSearchAction(found)==='ADD'?action('ADD','request',found.playerId):'<small>'+friendSearchAction(found)+'</small>')+'</ul>':'')+
       '<div class="friends-scroll">'+
+      (state?.roomInvites?.length?'<h3>ROOM INVITES</h3><ul class="friend-list">'+state.roomInvites.map(p=>row(p,action('JOIN','roominviteopen',p.playerId)+action('DISMISS','roominvitedismiss',p.playerId))).join('')+'</ul>':'')+
       (state?.incoming?.length?'<h3>REQUESTS · '+state.incoming.length+'</h3><ul class="friend-list">'+state.incoming.map(p=>row(p,action('ACCEPT','accept',p.playerId)+action('×','decline',p.playerId))).join('')+'</ul>':'')+
       '<h3>ONLINE · '+online.length+'</h3><ul class="friend-list">'+(online.length?online.map(p=>row(p)).join(''):'<li class="friend-empty">No friends online</li>')+'</ul>'+
       '<h3>ALL FRIENDS · '+(state?.friends.length||0)+'</h3><ul class="friend-list">'+(state?.friends.length?state.friends.map(p=>row(p,action('REMOVE','remove',p.playerId))).join(''):'<li class="friend-empty">Find a player to add your first friend</li>')+'</ul>'+
@@ -43,7 +45,15 @@ export function mountFriends(panel,onIdentity=()=>{}) {
     const button=event.target.closest('button');if(!button||busy)return;
     if(button.hasAttribute('data-find-players')){searching=!searching;render();panel.querySelector('input')?.focus();return;}
     if(!button.dataset.friendAction)return;
-    generation++;busy=true;error='';render();try{state=await request(button.dataset.friendAction,{playerId:button.dataset.playerId});found=null;}catch(e){error=e.message;}finally{busy=false;render();}
+    generation++;busy=true;error='';render();
+    try{
+      const type=button.dataset.friendAction,data={playerId:button.dataset.playerId};
+      if(type==='roominviteopen'){
+        const {invite}=await request(type,data);
+        if(await joinRoom(invite.roomCode))state=await request('roominvitedismiss',data);
+      }else state=await request(type,data);
+      found=null;
+    }catch(e){error=e.message;}finally{busy=false;render();}
   });
   panel.addEventListener('submit',async event=>{
     if(!event.target.matches('.friend-search'))return;event.preventDefault();if(busy)return;

@@ -5,7 +5,7 @@ import {seasonAt,seasonProgress,claimableSeasons,SEASON_CLAIM_GRACE} from './sea
 import {wardrobeById} from './wardrobe.js';
 import {skinsForRifle,rifleSkinById,SEASON_RIFLE_SKINS} from './rifle-skins.js';
 import {finishOffer} from './armory-offer.js';
-import {mountFriends} from './friends.js';
+import {mountFriends,requestFriends} from './friends.js';
 import { roundMusic } from "./round-music.js";
 import {CATALOG as goods} from './catalog.js';
 import {createProfileClient} from './profile-client.js';
@@ -591,6 +591,7 @@ async function connect(type, code, spectator = false) {
     session = joined;
     room();
     scheduleRoom();
+    return true;
   } catch (error) {
     if (generation === requestGeneration) {
       statusError(error.message, type === "online");
@@ -801,7 +802,8 @@ function room(arenaTransition = null) {
           '">Remove</button>'
         : "") +
       "</li>"
-    ).join("") + "</ul>";
+    ).join("") + (!s.public && s.phase==='waiting' && !me?.spectator && !conf.locked && participantCount<conf.capacity
+      ? '<li class="room-friends"><button class="btn" data-action="roomfriends">Invite a friend</button><div class="room-friend-list" hidden></div></li>' : '') + "</ul>";
   if (!s.public && s.phase === "waiting" && !me?.spectator) {
     html += '<div class="row room-actions">' +
       button(me?.ready ? "Unready" : "Ready up", "ready", "primary") +
@@ -852,6 +854,31 @@ async function invite() {
     input.setAttribute("aria-label", "Invite link");
     content.append(input);
     input.select();
+  }
+}
+async function showRoomFriends() {
+  const list=content.querySelector('.room-friend-list');
+  if(!list||!session)return;
+  if(!list.hidden){list.hidden=true;return;}
+  list.hidden=false;
+  list.textContent='Loading friends…';
+  try {
+    const {friends}=await requestFriends('list');
+    if(!list.isConnected)return;
+    list.innerHTML=friends.length?friends.slice().sort((a,b)=>Number(b.online)-Number(a.online))
+      .map(friend=>'<div><span>'+escape(friend.name)+(friend.online?' · Online':'')+'</span><button class="btn" data-room-invite-player="'+escape(friend.playerId)+'" aria-label="Invite '+escape(friend.name)+'">Invite</button></div>').join('')
+      :'Add a player from your Friends tab first.';
+  }catch(error){if(list.isConnected)list.textContent=error.message;}
+}
+async function inviteRoomFriend(button) {
+  if(!session||button.disabled)return;
+  button.disabled=true;
+  try{
+    await requestFriends('roominvite',{roomCode:session.code,playerId:button.dataset.roomInvitePlayer});
+    button.textContent='Sent';
+  }catch(error){
+    button.disabled=false;
+    notify(error.message);
   }
 }
 async function practiceArena(id = null) {
@@ -983,6 +1010,7 @@ function results(r, active) {
   if (active) scheduleRoom();
 }
 const actions = {
+  roomfriends: showRoomFriends,
   friends: () => document.querySelector('.tabs [data-tab="friends"]')?.click(),
   profile: profileView,
   recover:()=>recoveryView(),
@@ -1145,6 +1173,7 @@ document.addEventListener("click", (e) => {
     }
     return;
   }
+  if(b.dataset.roomInvitePlayer){void inviteRoomFriend(b);return;}
   if (b.dataset.weapon) {
     void inspect(b.dataset.weapon, shopArmory);
     return;
@@ -1368,7 +1397,7 @@ async function boot() {
     });
     $("#boot").hidden = true;
     bootReady = true;
-    friendsPanel=mountFriends($('#friends'),id=>{playerNumber=id;const label=content.querySelector('[data-profile-player-id]');if(label)label.textContent='PLAYER ID '+id;});
+    friendsPanel=mountFriends($('#friends'),id=>{playerNumber=id;const label=content.querySelector('[data-profile-player-id]');if(label)label.textContent='PLAYER ID '+id;},code=>connect('join',code));
     if(migrated)notify('Online progression starts fresh. Previous device save backed up.');
     const warmEquipment = () => void stageModule.characterThumbnails()
       .then(() => import('./weapon-preview.js')).then(module=>module.rifleThumbnails()).catch(()=>{});

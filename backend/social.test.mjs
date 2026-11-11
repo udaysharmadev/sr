@@ -4,8 +4,9 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {localProfileStore} from './local-profile-store.mjs';
-import {profileApi} from './profiles.mjs';
+import {profileApi,resolveGuestProfile} from './profiles.mjs';
 import {socialApi} from './social.mjs';
+import {roomApi} from './api.mjs';
 
 async function socialFixture(){
   const path=await mkdtemp(tmpdir()+'/rush-social-'),directory=pathToFileURL(path+'/');let saved=await localProfileStore(directory),time=1794000000000;
@@ -13,6 +14,7 @@ async function socialFixture(){
   async function post(handler,data,cookie,headers={}){const response=await handler(new Request('https://arena.test/api/social',{method:'POST',headers:{'Content-Type':'application/json',...(cookie?{cookie}:{}),...headers},body:JSON.stringify(data)}));return {status:response.status,cookie:response.headers.get('set-cookie'),...await response.json()};}
   const peers=[];for(const name of ['Alpha','Bravo','Charlie']){const opened=await post(profiles,{type:'open',name});const cookie=opened.cookie.split(';')[0];const list=await post(friends,{type:'list'},cookie);assert.equal(list.status,200);peers.push({cookie,id:list.playerId,profile:opened.profile});}
   return {peers,post:(data,peer,headers)=>post(friends,data,peer?.cookie,headers),profile:(data,peer)=>post(profiles,data,peer.cookie),step:ms=>time+=ms,
+    room:(data,peer,token)=>post(roomApi(saved.rooms,()=>time,request=>resolveGuestProfile(saved.store,request)),data,peer.cookie,token?{authorization:'Bearer '+token}:{}),
     async reopen(){saved.close();saved=await localProfileStore(directory);profiles=profileApi(saved.store,()=>time);friends=socialApi(saved.social,saved.store,()=>time);},
     async close(){saved.close();await rm(path,{recursive:true,force:true});}};
 }
@@ -27,6 +29,34 @@ test('numeric player IDs persist through reopen and recovery; lookup returns onl
     const restored=await h.profile({type:'recover',code:key.result.recoveryCode},a);assert.equal(restored.status,200);
     const old=a.cookie;a.cookie=restored.cookie.split(';')[0];assert.equal((await h.post({type:'list'},a)).playerId,a.id);
     assert.equal((await h.post({type:'list'},{cookie:old})).status,401);
+  }finally{await h.close();}
+});
+test('private-room invites require a current member and an accepted friend, then resolve to the real room',async()=>{
+  const h=await socialFixture();try{
+    const [host,guest,other]=h.peers;
+    const created=await h.room({type:'create'},host);
+    assert.equal(created.status,200);
+    const invite={type:'roominvite',roomCode:created.code,playerId:guest.id};
+    assert.equal((await h.post(invite,host)).status,409);
+    assert.equal((await h.post({type:'request',playerId:guest.id},host)).status,200);
+    assert.equal((await h.post({type:'accept',playerId:host.id},guest)).status,200);
+    assert.equal((await h.post({...invite,playerId:host.id},guest)).status,409);
+    assert.equal((await h.post(invite,host)).status,200);
+    assert.equal((await h.post(invite,host)).status,200);
+    assert.equal((await h.post({type:'list'},guest)).roomInvites.length,1);
+    const open={type:'roominviteopen',playerId:host.id};
+    assert.equal((await h.post(open,other)).status,409);
+    assert.equal((await h.room({type:'settings',code:created.code,settings:{locked:true}},host,created.token)).status,200);
+    assert.equal((await h.post(open,guest)).status,409);
+    assert.equal((await h.room({type:'settings',code:created.code,settings:{locked:false}},host,created.token)).status,200);
+    const opened=await h.post(open,guest);
+    assert.deepEqual(opened.invite,{playerId:host.id,name:'Alpha',roomCode:created.code});
+    assert.equal((await h.room({type:'join',code:opened.invite.roomCode},guest)).status,200);
+    assert.equal((await h.post({type:'roominvitedismiss',playerId:host.id},guest)).roomInvites.length,0);
+    assert.equal((await h.post(open,guest)).status,409);
+    assert.equal((await h.post(invite,host)).status,200);
+    await h.room({type:'leave',code:created.code},host,created.token);
+    assert.equal((await h.post(open,guest)).status,409);
   }finally{await h.close();}
 });
 test('requests require receiver acceptance; third parties/replay cannot mutate, and removal updates both views',async()=>{

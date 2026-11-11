@@ -108,7 +108,7 @@ Exit: deterministic checks cover the complete new paths, Worker serves all modul
 | Daily challenges | UTC daily 10 quickscopes, 5 airborne kills and 2 public wins; one-time XP/coin rewards plus 10/10/20 gems; late prior-day results cannot replace a newer record | Full public-round device playtest; deterministic event/reward tests pass |
 | Podium | Up to five actual top players in the current arena, full equipped lobby-quality operators, held rifles, individual poses, overhead kills/deaths/streak and weapon/accuracy cards; continuous final-five-second music | Actual three-client 1280×720 review passes; five-player/compact/device and distinct remote gear review remain open |
 | Character gear | Six different costume structures, six headgear types, four shoe constructions; canonical gear reaches remote actors/results; full actual-mesh thumbnails and focus previews | Additional hair/glove content, remote gold finish and broader cosmetic roster |
-| Friends | Existing private room codes/invite links with FFA, duel and TDM rules | Public parties, CTF, arms race and 8/16-player tournament bracket are not implemented; do not show inactive mode buttons |
+| Friends | Private room codes, invite links and direct friend invites, with FFA, duel, TDM, CTF and Arms Race rules | Public parties and 8/16-player tournament brackets remain open |
 | Sniper locker | Eight gun models, per-rifle voices, mastery and earned gold | Additional scope designs, reticle styles and selectable cosmetic trails/audio |
 
 Four playable arenas share authoritative collision and the exposed-face renderer:
