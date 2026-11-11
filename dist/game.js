@@ -17,7 +17,7 @@ import { canChangeWeapon, CHAMBER_MS, weaponById, WEAPONS } from "./weapons.js";
 import { disposeRifle, setRifleFinish } from "./rifle-models.js";
 import { createWeaponPreview, fillRifleThumbnails, rifleThumbnails } from "./weapon-preview.js";
 import { isRetryable, isSessionExpired, recoveryDelay, watchSession, estimatedServerTime } from "./net.js";
-import { frameTimings, renderQuality } from "./quality.js";
+import { frameTimings, QUALITY_CHOICES, renderQuality } from "./quality.js";
 import { spectatorView } from "./spectator.js";
 import { gameAudioOutput } from "./platform-audio.js";
 import * as T from "./vendor/three.module.js";
@@ -44,7 +44,7 @@ const text = (parent, tag, value) => {
 const timing = { shot: CHAMBER_MS, reload: CHAMBER_MS };
 
 export function startGame(
-  { container, session = null, queueSession = null, practiceMap = null, settings = {}, onExit, onResults, onWeaponChange, onSettingsChange, onActivityChange, onRoomState },
+  { container, session = null, queueSession = null, practiceMap = null, settings = {}, onExit, onResults, onWeaponChange, onSettingsChange, onActivityChange, onRoomState, onPerformance },
 ) {
   const map = [...MAPS,TRAINING_MAP].find((m) => m.id === (session?.state.arena || session?.state.map || practiceMap)) || MAPS[0],
     practice = !session,
@@ -72,8 +72,9 @@ export function startGame(
     const label = String(value);
     if (node.textContent !== label) node.textContent = label;
   };
-  const quality = renderQuality(settings.quality, window.devicePixelRatio);
-  const timings = frameTimings();
+  let quality = renderQuality(settings.quality, window.devicePixelRatio);
+  let timings = frameTimings();
+  let networkTimings = frameTimings();
   let skipFrameSample = true;
   const renderer = new T.WebGLRenderer({
     canvas,
@@ -88,7 +89,7 @@ export function startGame(
   const scene = new T.Scene(),
     camera = new T.PerspectiveCamera(70, 1, .045, 180);
   const view = new T.Scene(), viewCam = new T.PerspectiveCamera(61, 1, .025, 5);
-  buildArena(scene, map, quality);
+  const arenaSun = buildArena(scene, map, quality);
   const flagModels = {};
   if (!practice && session.state.settings.mode === 'ctf') {
     for (const [team,color] of [['blue',0x367dff],['orange',0xff8a35]]) {
@@ -392,6 +393,7 @@ export function startGame(
     serverAnchor = estimatedServerTime(s); serverAnchorAt = performance.now();
     lastSync = now();
     ping = me.ping || 0;
+    if (hadState && !paused && !document.hidden) networkTimings.record(ping);
     const respawn = me.alive && (!lastAlive || hadState && me.life !== p.life);
     if (lastAlive && !me.alive) { resetInput(); combatAudio?.cancelChamber(); }
     lastAlive = me.alive;
@@ -704,7 +706,6 @@ export function startGame(
       joinedLate: Boolean(final && final.liveSince > session.state.startedAt + 1000),
       team: final?.team,
       scores: session?.state.scores,
-      performance: { ...timings.summary(), quality: quality.name },
       spectator: spectating,
     };
     handoffToResults = true;
@@ -982,17 +983,37 @@ export function startGame(
     ["shake", "Camera shake", 0, 1, .05, .45],
   ];
   const optionValue = (key, value) => ["volume", "musicVolume", "effectsVolume", "shake"].includes(key) ? Math.round(value * 100) + "%" : key === "reticle" ? value + "px" : Number(value).toFixed(2);
+  function changeMatchQuality(value) {
+    if (value === quality.name || !QUALITY_CHOICES.some(([id]) => id === value)) return;
+    const next = renderQuality(value, window.devicePixelRatio);
+    if (quality.shadowSize !== next.shadowSize || !next.shadows) {
+      arenaSun.shadow.map?.dispose();
+      arenaSun.shadow.map = null;
+      arenaSun.shadow.mapSize.set(next.shadowSize, next.shadowSize);
+    }
+    arenaSun.castShadow = renderer.shadowMap.enabled = next.shadows;
+    renderer.setPixelRatio(next.pixelRatio);
+    quality = next;
+    settings.quality = next.name;
+    timings = frameTimings();
+    networkTimings = frameTimings();
+    paint();
+    onSettingsChange?.({ quality: next.name });
+  }
   function openMatchSettings() {
     pause();
     $(".sr-pause-actions").hidden = true;
     $(".sr-break h2").textContent = "Settings";
     const panel = $(".sr-match-options");
-    panel.innerHTML = matchRanges.map(([key, label, min, max, step, fallback]) => {
+    panel.innerHTML = '<div class="sr-match-option-list"><fieldset class="sr-match-quality"><legend>Graphics quality</legend>' +
+      QUALITY_CHOICES.map(([id, label]) => '<button data-match-quality="' + id +
+        '" aria-pressed="' + (quality.name === id) + '">' + label + '</button>').join('') +
+      '</fieldset>' + matchRanges.map(([key, label, min, max, step, fallback]) => {
       const value = settings[key] ?? fallback;
       return '<label><span>' + label + '</span><output>' + optionValue(key, value) + '</output><input type="range" aria-label="' + label + '" data-match-setting="' + key + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '"></label>';
-    }).join("") + [['invertY', 'Invert vertical aim'], ['reducedMotion', 'Reduced motion']].map(([key, label]) => '<label class="sr-option-toggle"><span>' + label + '</span><input type="checkbox" aria-label="' + label + '" data-match-setting="' + key + '" ' + (settings[key] ? 'checked' : '') + '></label>').join('') + '<button class="sr-options-done">Back to match menu</button>';
+    }).join("") + [['invertY', 'Invert vertical aim'], ['reducedMotion', 'Reduced motion']].map(([key, label]) => '<label class="sr-option-toggle"><span>' + label + '</span><input type="checkbox" aria-label="' + label + '" data-match-setting="' + key + '" ' + (settings[key] ? 'checked' : '') + '></label>').join('') + '</div><button class="sr-options-done">Back to match menu</button>';
     panel.hidden = false;
-    panel.querySelector("input").focus({ preventScroll: true });
+    panel.querySelector('[aria-pressed="true"]').focus({ preventScroll: true });
   }
   function cycleMenuFocus(panel, reverse) {
     const buttons = [...panel.querySelectorAll("button:not(:disabled), input:not(:disabled)")].filter(el => el.getClientRects().length);
@@ -1072,6 +1093,13 @@ export function startGame(
   handle($(".sr-settings"), "click", openMatchSettings);
   handle($(".sr-open-settings"), "click", openMatchSettings);
   handle($(".sr-match-options"), "click", (event) => {
+    const choice = event.target.closest("[data-match-quality]");
+    if (choice) {
+      changeMatchQuality(choice.dataset.matchQuality);
+      for (const button of $(".sr-match-options").querySelectorAll("[data-match-quality]")) {
+        button.setAttribute("aria-pressed", String(button.dataset.matchQuality === quality.name));
+      }
+    }
     if (event.target.closest(".sr-options-done")) { showPauseActions(); $(".sr-continue").focus(); }
   });
   handle($(".sr-match-options"), "input", (event) => {
@@ -1237,6 +1265,8 @@ export function startGame(
   function cleanup(preserveAim = false) {
     if (stopped) return;
     stopped = true;
+    const frameReport = timings.summary();
+    if (frameReport) onPerformance?.({ ...frameReport, quality: quality.name, network: networkTimings.summary() });
     stopQueue?.();
     cancelAnimationFrame(frame);
     ctrl.abort();
@@ -1266,6 +1296,7 @@ export function startGame(
     }
     for (const g of geo) g.dispose();
     for (const t of textures) t.dispose();
+    arenaSun.shadow.dispose();
     environment.dispose();
     renderer.dispose();
     renderer.forceContextLoss();

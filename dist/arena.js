@@ -315,6 +315,7 @@ export function buildArena(scene, map, quality = { shadows: true, shadowSize: 10
     for(const target of map.targets)mesh(scene,geometry,face,target.x,target.y,target.z+.115);
   }
   unit.dispose();
+  return sun;
 }
 
 export function operator(scene, color = 0xf4664c, weapon = "sunbolt", gear = null) {

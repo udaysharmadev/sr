@@ -1,4 +1,5 @@
 import {audioLevel} from './audio-levels.js';
+import {QUALITY_CHOICES} from './quality.js';
 import {activeEvents,EVENTS,eventStatus} from './events.js';
 import {seasonAt,seasonProgress,claimableSeasons,SEASON_CLAIM_GRACE} from './seasons.js';
 import {wardrobeById} from './wardrobe.js';
@@ -496,9 +497,12 @@ function settingsView(tab = settingsTab) {
       '<div class="sound-check"><span>' + icon("sound") + '</span>' + button('Play elimination sound', 'testcue') + '</div></div>' +
       '<aside class="settings-preview audio-preview">' + icon("sound") + '<span>GAME AUDIO</span></aside>',
     video: '<div class="settings-options"><h2>Graphics & motion</h2><div class="quality-choices" aria-label="Graphics quality">' +
-      [["low", "Low"], ["balanced", "Balanced"], ["high", "High"]].map(([id, name]) =>
+      QUALITY_CHOICES.map(([id, name]) =>
         '<button data-quality="' + id + '" aria-pressed="' + (settings.quality === id) + '"><i></i><b>' + name + '</b></button>'
       ).join('') + '</div>' + settingRange("shake", "Camera shake", 0, 1, .05) + settingToggle("reducedMotion", "Reduced motion") +
+      (lastPerformance.samples ? '<p class="last-performance">Last session · ' + escape(lastPerformance.quality) +
+        '<br>Frame time ' + Number(lastPerformance.p50Ms).toFixed(1) + ' ms median · ' + Number(lastPerformance.p95Ms).toFixed(1) + ' ms p95' +
+        (lastPerformance.network ? '<br>Server RTT ' + Number(lastPerformance.network.p50Ms).toFixed(0) + ' ms median · ' + Number(lastPerformance.network.p95Ms).toFixed(0) + ' ms p95' : '') + '</p>' : '') +
       '</div><aside class="settings-preview quality-preview">' + icon("target") + '<span>' + String(settings.quality).toUpperCase() + '</span></aside>',
   };
   show("settings", "Settings", '<nav class="settings-nav" aria-label="Settings categories">' +
@@ -901,7 +905,15 @@ async function launch(active, queue = null, practiceMap = null) {
         results(r, active);
       },
       onWeaponChange: (id) => {if(id!==profile.equipped.skins)void saves.mutate('equip',{category:'skins',item:id}).catch(error=>notify(error.message));},
-      onSettingsChange: (changes) => { Object.assign(settings, changes); save(); },
+      onSettingsChange: (changes) => {
+        Object.assign(settings, changes);
+        if (changes.quality) stage?.setQuality(changes.quality);
+        save();
+      },
+      onPerformance: (report) => {
+        lastPerformance = report;
+        try { localStorage.setItem("sr.performance.v1", JSON.stringify(report)); } catch {}
+      },
       onActivityChange: (value) => sdkLifecycle?.gameplay(value),
       onRoomState: publishRoom,
     });
@@ -933,10 +945,6 @@ function endGame(preserveAim = false) {
   sdkLifecycle?.gameplay(false);
 }
 function results(r, active) {
-  if (r.performance?.samples) {
-    lastPerformance = r.performance;
-    try { localStorage.setItem("sr.performance.v1", JSON.stringify(lastPerformance)); } catch {}
-  }
   const publicRound = active?.state.public && !r.practice;
   const rank = r.players.findIndex((p) => p.id === r.playerId) + 1;
   const teamMode = ["Team deathmatch", "Capture the flag"].includes(r.mode);

@@ -1865,6 +1865,7 @@ input:checked + .toggle-state:before { content: "ON"; color: #b5f183; }
 .quality-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
 .quality-choices button { border: 1px solid #82807a; border-radius: 6px; background: #30322c; padding: 14px 4px; display: grid; justify-items: center; gap: 10px; font: italic 800 19px Rush; }
 .quality-choices button[aria-pressed="true"] { border-color: #c7dd75; background: #353b29; box-shadow: inset 0 -3px #c7dd75; }
+.last-performance { margin: 12px 0 0; color: #d8d2bc; font: 700 14px/1.45 Bay, sans-serif; }
 .quality-choices i { display: block; width: 30px; height: 18px; border: 3px solid #c6c5c2; border-bottom-width: 5px; border-radius: 2px; }
 .quality-choices button:nth-child(2) i { box-shadow: 5px 4px #a9a8a34d; }
 .quality-choices button:nth-child(3) i { box-shadow: 5px 4px #a9a8a34d, -5px -4px #a9a8a34d; }

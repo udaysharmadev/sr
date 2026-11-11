@@ -3,6 +3,7 @@ const presets = {
   balanced: { pixelRatio: 1.25, shadows: true, shadowSize: 512, antialias: true },
   high: { pixelRatio: 1.65, shadows: true, shadowSize: 1024, antialias: true },
 };
+export const QUALITY_CHOICES = [['low', 'Low'], ['balanced', 'Balanced'], ['high', 'High']];
 export function renderQuality(value = "high", deviceRatio = 1) {
   const name = Object.hasOwn(presets, value) ? value : "high";
   return { ...presets[name], name,
