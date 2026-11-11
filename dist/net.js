@@ -101,6 +101,7 @@ async function request(body, token, keepalive = false) {
 function attachSession(session) {
   let pending = Promise.resolve(), closed = false, queued = 0, epoch = 0;
   session.failures = 0;
+  Object.defineProperty(session, "busy", { get: () => queued > 0 });
   saveSession(session);
   session.action = (type, data = {}) => {
     const enqueued = performance.now(), realtime = realtimeActions.has(type), enqueuedEpoch = epoch;

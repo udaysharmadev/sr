@@ -101,6 +101,19 @@ function holdRefresh(){
   globalThis.fetch=async(url,init)=>{if(JSON.parse(init.body).type==='refresh'){entered();await gate;}return send(url,init);};
   return {release,started};
 }
+test("transport reports busy while a request is in flight and while another is queued", () => withNetwork(async () => {
+  const session = await createPrivate("Transport QA");
+  assert.equal(session.busy, false);
+  const hold = holdRefresh();
+  const pending = session.refresh();
+  await hold.started;
+  assert.equal(session.busy, true);
+  const next = session.action("ready", { ready: true });
+  hold.release();
+  await Promise.all([pending, next]);
+  assert.equal(session.busy, false);
+  await session.leave();
+}));
 test('stale queued combat and input expire locally without reaching authority or replaying after reconnect',()=>withNetwork(async({calls,tick})=>{
   const session=await createPrivate('Slow queue'),hold=holdRefresh(),first=session.refresh();await hold.started;
   const queued=['input','shoot','melee','prime','throw','equip'].map(type=>session.action(type,{seq:1,equipment:'knife'}));

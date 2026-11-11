@@ -2,6 +2,7 @@ import { clearPosition, MAPS, TRAINING_MAP } from "../dist/maps.js";
 import { canChangeWeapon, CHAMBER_MS, WEAPONS, cosmeticLoadout } from "../dist/weapons.js";
 import { EQUIPMENT, KNIFE_RANGE, KNIFE_MS, FUSE_MS, CHARGE_MS, MAX_HEALTH, KNIFE_DAMAGE, blastDamage, damagePlayer, grenadeLaunch, stepGrenade, playerAlias, rifleHitboxes, eyeOrigin } from "../dist/equipment.js";
 import { movePlayer, resetPlayerMotion } from "../dist/movement.js";
+import { takeRecentMovementFrames } from "../dist/input-queue.js";
 import { armsStage, compareArmsPlayers } from '../dist/arms-race.js';
 import { createFlags, dropFlags, updateFlags } from './ctf.mjs';
 
@@ -757,19 +758,18 @@ export function command(r, token, data, now) {
   if (!Number.isSafeInteger(data.seq) || data.seq <= p.inputSeq) return;
   p.inputSeq = data.seq;
   if (!p.alive) return;
-  const frames = Array.isArray(data.frames) ? data.frames.slice(0, 32) : [];
+  const frames = Array.isArray(data.frames) ? data.frames.slice(0, 32)
+    .filter(frame => Number.isFinite(frame?.dt) && frame.dt > 0)
+    .map(frame => frame.dt > .05 ? { ...frame, dt: .05 } : frame) : [];
   p.credit = Math.min(.32, p.credit + Math.max(0, now - p.moveTime) / 1000);
   p.moveTime = now;
-  for (const frame of frames) {
-    if (!frame || !Number.isFinite(frame.dt) || frame.dt <= 0) continue;
-    const dt = Math.min(.05, p.credit, frame.dt);
-    if (dt < .000001) break;
+  for (const frame of takeRecentMovementFrames(frames, p.credit)) {
     if (typeof frame.scoped === "boolean") {
       if (frame.scoped && !p.scoped) p.scopeSince = now;
       p.scoped = frame.scoped && (p.equipment || "rifle") === "rifle";
     }
-    movePlayer(p, frame, dt, arenaFor(r));
-    p.credit -= dt;
+    movePlayer(p, frame, frame.dt, arenaFor(r));
+    p.credit = Math.max(0, p.credit - frame.dt);
     updateObjectives(r, now);
     if (r.phase === 'results') break;
   }

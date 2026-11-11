@@ -600,7 +600,8 @@ export function startGame(
     }
   }
   function network(t) {
-    if (!session || waiting || t < retryAt || t - netAt < 80) return;
+    // Sample current controls when the transport is ready to send them.
+    if (!session || waiting || session.busy || t < retryAt || t - netAt < 80) return;
     netAt = t;
     waiting = true;
     if (frames.length && !needsResync) {

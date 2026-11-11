@@ -5,6 +5,29 @@ import { readFile } from "node:fs/promises";
 import { D1Store, MemoryStore, roomApi } from "./api.mjs";
 import { addPlayer, advance, command, newRoom, snapshot } from "./rooms.mjs";
 
+test("compressed arrival applies the newest controls within the server movement credit", () => {
+  const now = 1000000;
+  const room = newRoom("BURST1", false);
+  const { token } = addPlayer(room, { name: "Movement QA" }, now - 1000);
+  room.phase = "live";
+  const player = room.players[0];
+  Object.assign(player, { credit: 0, moveTime: now - 50, scoped: true });
+  const { x, z } = player;
+  command(room, token, {
+    type: "input", life: player.life, seq: 1, frames: [
+      { dt: .05, forward: 1, jump: true, scoped: true },
+      { dt: .05, forward: 0, yaw: .8, scoped: false },
+    ],
+  }, now);
+  assert.equal(player.x, x);
+  assert.equal(player.z, z);
+  assert.equal(player.grounded, true);
+  assert.equal(player.scoped, false);
+  assert.equal(player.yaw, .8);
+  assert.ok(player.credit < 1e-9);
+  assert.equal(player.inputSeq, 1);
+});
+
 function harness(store) {
   let now = 1000000;
   const api = roomApi(store, () => now);
