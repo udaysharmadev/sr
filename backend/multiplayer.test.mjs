@@ -37,6 +37,56 @@ async function storage(kind){
   const binding={prepare(sql){return {bind(...args){return {async first(){await Promise.resolve();return db.prepare(sql).get(...args);},async all(){return {results:db.prepare(sql).all(...args)};},async run(){await Promise.resolve();return {meta:db.prepare(sql).run(...args)};}};}};}};
   return {store:new D1Store(binding),close:()=>db.close()};
 }
+for (const kind of ['memory', 'sqlite/D1']) test('ready party keeps its sessions while public matchmaking fills the room on '+kind, async () => {
+  const backend = await storage(kind);
+  let time = at;
+  const api = roomApi(backend.store, () => time);
+  const post = async (type, data = {}, session = null) => {
+    const response = await api(new Request('http://local.test/api/rooms', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', ...(session ? {Authorization:'Bearer '+session.token} : {})},
+      body: JSON.stringify({...data, type, ...(session ? {code:session.code} : {})}),
+    }));
+    return {status:response.status, ...await response.json()};
+  };
+  try {
+    const host = await post('create', {name:'Party leader'});
+    assert.equal((await post('queueparty', {}, host)).status, 409);
+    const friend = await post('join', {code:host.code,name:'Party friend'});
+    await post('settings', {settings:{mode:'duel',spectators:true}}, host);
+    const observer = await post('join', {code:host.code,spectator:true,name:'Observer'});
+    assert.equal((await post('queueparty', {}, friend)).status, 403);
+    await post('ready', {ready:true}, host);
+    assert.equal((await post('queueparty', {}, host)).status, 409);
+    await post('ready', {ready:true}, friend);
+    assert.equal((await post('queueparty', {}, host)).status, 409, 'spectators cannot be carried into public play');
+    await post('leave', {}, observer);
+    const queued = await post('queueparty', {}, host);
+    assert.equal(queued.status, 200);
+    assert.equal(queued.state.public, true);
+    assert.equal(queued.state.settings.mode, 'ffa');
+    assert.equal(queued.state.settings.capacity, 15);
+    assert.equal(queued.state.settings.duration, 10);
+    assert.deepEqual(new Set(queued.state.players.map(player=>player.id)), new Set([host.id,friend.id]));
+    assert.equal((await post('join', {code:host.code,name:'Direct join'})).status, 400);
+    assert.equal((await post('refresh', {}, friend)).state.public, true);
+    const entrants = await Promise.all(Array.from({length:13},(_,i)=>post('public',{name:'Public pilot '+i})));
+    assert.ok(entrants.every(entrant=>entrant.status===200&&entrant.code===host.code));
+    assert.equal((await post('refresh', {}, friend)).state.phase, 'vote');
+    assert.notEqual((await post('public',{name:'Overflow'})).code,host.code);
+    await post('vote', {map:'overlook'}, friend);
+    time += 10000;
+    assert.equal((await post('refresh', {}, friend)).state.phase,'warmup');
+    time += 10000;
+    const live = await post('refresh', {}, friend);
+    assert.equal(live.state.phase, 'live');
+    assert.equal(live.state.map, 'overlook');
+    assert.ok(live.state.players.some(player=>player.id===host.id&&player.alive));
+    assert.ok(live.state.players.some(player=>player.id===friend.id&&player.alive));
+  } finally {
+    backend.close();
+  }
+});
 for(const kind of ['memory','sqlite/D1'])test('15-client concurrent authority, duplicate packets, expiry and late joins on '+kind,async()=>{
   const backend=await storage(kind);let time=at;const api=roomApi(backend.store,()=>time),clients=[];
   const post=async(type,data={},c)=>{const res=await api(new Request('http://local.test/api/rooms',{method:'POST',headers:{'Content-Type':'application/json',...(c?{Authorization:'Bearer '+c.token}:{})},body:JSON.stringify({...data,type,...(c?{code:c.code}:{})})}));return {status:res.status,...await res.json()};};

@@ -13,6 +13,8 @@ import {rifleMastery,earnedBadges,hasGoldFinish} from '../dist/progression.js';
 import {cosmeticLoadout} from '../dist/weapons.js';
 
 const ttl = 10 * 60 * 1000;
+const partySearchLimit = 16;
+const isPartyQueue = (room) => room.public && room.partyQueueAt != null && room.phase === "waiting";
 const failure = (message, status) =>
   Object.assign(new Error(message), { status });
 const json = (body, status = 200) =>
@@ -35,6 +37,13 @@ export class MemoryStore {
     for (const [code, row] of this.rows) {
       if (row.touched < now - ttl) this.rows.delete(code);
     }
+  }
+  async partyQueues(now) {
+    return [...this.rows.entries()]
+      .filter(([, row]) => row.touched >= now - ttl && isPartyQueue(row.room) && row.room.players.length < 15
+        && row.room.players.some(player => now - player.seen <= 45000))
+      .sort(([, a], [, b]) => a.room.partyQueueAt - b.room.partyQueueAt)
+      .slice(0, partySearchLimit).map(([code]) => code);
   }
 }
 export class D1Store {
@@ -68,6 +77,17 @@ export class D1Store {
     await this.settleFinished(now);
     // Leave any unprocessed overdue public round for the next bounded batch.
     await this.db.prepare("DELETE FROM rush_rooms WHERE touched<? AND NOT (json_extract(state,'$.public')=1 AND json_extract(state,'$.phase')='live' AND json_extract(state,'$.endsAt')<=?)").bind(now-ttl,now).run();
+  }
+  async partyQueues(now) {
+    const { results } = await this.db.prepare(`
+      SELECT code FROM rush_rooms
+      WHERE touched>=? AND json_extract(state,'$.partyQueueAt') IS NOT NULL
+        AND json_extract(state,'$.public')=1 AND json_extract(state,'$.phase')='waiting'
+        AND json_array_length(state,'$.players')<15
+        AND EXISTS (SELECT 1 FROM json_each(state,'$.players') WHERE json_extract(value,'$.seen')>=?)
+      ORDER BY json_extract(state,'$.partyQueueAt'),code LIMIT ?
+    `).bind(now - ttl, now - 45000, partySearchLimit).all();
+    return results.map(row => row.code);
   }
   async settleRoom(code,now){
     for(let attempt=0;attempt<3;attempt++){
@@ -114,9 +134,11 @@ export function roomApi(store, clock = Date.now, identity = null) {
       const guest=identity?await identity(request):null;
       if(identity&&!guest)return json({error:'Reconnect your guest save before joining a match.'},401);
       const publicQueue = data.type === "public";
+      const partyCodes = publicQueue ? await store.partyQueues(clock()) : [];
+      let partyIndex = 0;
       let slot = 0,
         code = publicQueue
-          ? "P00000"
+          ? partyCodes[0] ?? "P00000"
           : data.type === "create"
           ? codeForRoom()
           : String(data.code || "").toUpperCase();
@@ -135,6 +157,11 @@ export function roomApi(store, clock = Date.now, identity = null) {
       while (collision < 32 && slot < 200) {
         const prev = await store.read(code), now = clock();
         const expired = !prev || prev.touched < now - ttl;
+        const lookingAtParty = publicQueue && partyIndex < partyCodes.length;
+        if (lookingAtParty && (expired || !isPartyQueue(prev.room))) {
+          code = partyCodes[++partyIndex] ?? "P00000";
+          continue;
+        }
         if(expired&&prev?.room.public&&prev.room.phase==='live'&&prev.room.endsAt<=now&&store.settleRoom){
           await store.settleRoom(code,now);collision++;continue;
         }
@@ -148,6 +175,11 @@ export function roomApi(store, clock = Date.now, identity = null) {
         room.completedRewards=[];
         advance(room, now);
         const vacant = room.players.length === 0;
+        if (lookingAtParty && (vacant || room.phase !== "waiting" || room.players.length >= room.settings.capacity ||
+            room.banned.includes(data.device))) {
+          code = partyCodes[++partyIndex] ?? "P00000";
+          continue;
+        }
         if ((expired || vacant) && !["create", "public"].includes(data.type)) {
           return json({
             error: "Room expired. Create a new room or request a fresh invite.",

@@ -678,6 +678,7 @@ function roomChoices(key, conf) {
 }
 function fingerprint(s) {
   return JSON.stringify([
+    s.public,
     s.phase,
     s.settings,
     s.host,
@@ -805,8 +806,10 @@ function room(arenaTransition = null) {
     ).join("") + (!s.public && s.phase==='waiting' && !me?.spectator && !conf.locked && participantCount<conf.capacity
       ? '<li class="room-friends"><button class="btn" data-action="roomfriends">Invite a friend</button><div class="room-friend-list" hidden></div></li>' : '') + "</ul>";
   if (!s.public && s.phase === "waiting" && !me?.spectator) {
+    const canQueueParty = participantCount >= 2 && s.players.every(p => p.ready && !p.spectator);
     html += '<div class="row room-actions">' +
       button(me?.ready ? "Unready" : "Ready up", "ready", "primary") +
+      (host ? '<button class="btn" data-action="queueparty" '+(canQueueParty?'':'disabled')+'>Queue public FFA</button>' : '') +
       (host ? button("Start match", "start") : "") +
       (["tdm","ctf"].includes(conf.mode) ? button("Switch team", "team") : "") + "</div>";
   }
@@ -820,7 +823,12 @@ function room(arenaTransition = null) {
   }).catch(()=>{if(previewEpoch===roomMapEpoch)mapCanvas.setAttribute('aria-label','Arena preview unavailable');});
 }
 function publishRoom(state) {
-  if (!sdk || state.public) return;
+  if (!sdk) return;
+  if (state.public) {
+    if (roomPresence) sdkCall("leftRoom");
+    roomPresence = "";
+    return;
+  }
   const joinable = !state.settings.locked && state.players.filter((p) => !p.spectator).length < state.settings.capacity;
   const presence = state.code + joinable;
   if (presence === roomPresence) return;
@@ -1056,6 +1064,7 @@ const actions = {
       ready: !session.state.players.find((p) => p.id === session.id)?.ready,
     }),
   start: () => act("start"),
+  queueparty: () => act("queueparty"),
   team: () =>
     act("team", {
       team: session.state.players.find((p) =>

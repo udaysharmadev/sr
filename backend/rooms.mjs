@@ -22,6 +22,18 @@ export const codeForRoom = () =>
     crypto.getRandomValues(new Uint8Array(6)),
     (n) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[n % 32],
   ).join("");
+const defaultRoomSettings = (isPublic) => ({
+  mode: "ffa",
+  duration: 10,
+  capacity: isPublic ? 15 : 4,
+  map: MAPS[0].id,
+  locked: false,
+  autoAssign: true,
+  spectators: false,
+  firstToTen: true,
+  duelRule: "points",
+  targetPoints: 10,
+});
 
 export function newRoom(code, isPublic) {
   return {
@@ -42,17 +54,7 @@ export function newRoom(code, isPublic) {
     eventId: 0,
     eventResetId: 0,
     scores: { blue: 0, orange: 0 },
-    settings: {
-      mode: "ffa",
-      duration: 10,
-      capacity: isPublic ? 15 : 4,
-      map: MAPS[0].id,
-      locked: false,
-      autoAssign: true,
-      spectators: false,
-      firstToTen: true,
-      duelRule: 'points', targetPoints: 10,
-    },
+    settings: defaultRoomSettings(isPublic),
   };
 }
 
@@ -666,7 +668,7 @@ export function command(r, token, data, now) {
     p.weapon = data.weapon;
     return;
   }
-  if (["ready", "settings", "kick", "team", "start"].includes(type)) {
+  if (["ready", "settings", "kick", "team", "start", "queueparty"].includes(type)) {
     requireRule(
       !r.public && r.phase === "waiting" && !p.spectator,
       "Room configuration is closed.",
@@ -705,6 +707,16 @@ export function command(r, token, data, now) {
       livePlayers(r).length >= 2 && livePlayers(r).every((q) => q.ready),
       "At least two players must join and everyone must be ready.",
     );
+    if (type === "queueparty") {
+      requireRule(r.players.every(q => !q.spectator), "Spectators must leave before public matchmaking.");
+      r.public = true;
+      r.partyQueueAt = now;
+      r.settings = defaultRoomSettings(true);
+      r.votes = {};
+      for (const member of r.players) member.ready = false;
+      advance(r, now);
+      return;
+    }
     if (teamGame(r.settings.mode)) {
       requireRule(
         countTeam(r, "blue") === countTeam(r, "orange") &&
