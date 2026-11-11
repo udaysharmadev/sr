@@ -685,7 +685,7 @@ function fingerprint(s) {
     s.endsAt ? Math.ceil((s.endsAt - s.serverTime) / 1000) : 0,
   ]);
 }
-function room() {
+function room(arenaTransition = null) {
   if (!session) return;
   const s = session.state;
   roomFingerprint = fingerprint(s);
@@ -722,7 +722,7 @@ function room() {
     return;
   }
   if (s.phase === "warmup" || s.phase === "live") {
-    void launch(session);
+    void launch(session, null, null, arenaTransition);
     return;
   }
   if (s.public && s.phase === 'vote') {
@@ -859,7 +859,7 @@ async function practiceArena(id = null) {
   await leaving;
   if(generation===requestGeneration)await launch(null,null,id);
 }
-async function launch(active, queue = null, practiceMap = null) {
+async function launch(active, queue = null, practiceMap = null, arenaTransition = null) {
   if (gameRunning || sessionStarting === requestGeneration) return;
   const generation=requestGeneration;
   sessionStarting = generation;
@@ -881,6 +881,7 @@ async function launch(active, queue = null, practiceMap = null) {
       session: active,
       queueSession: queue,
       practiceMap,
+      arenaTransition,
       settings: {
         ...settings,
         audioBuffers: initialAudioBuffers,
@@ -893,7 +894,7 @@ async function launch(active, queue = null, practiceMap = null) {
       onExit: (reason) => {
         endGame(Boolean(reason?.preserveAim));
         if (reason?.preserveRoom && session) {
-          room();
+          room(reason.arenaTransition);
           scheduleRoom();
         } else {
           void leaveRoom();

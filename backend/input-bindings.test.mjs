@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindingError, DEFAULT_BINDINGS, keyLabel, resolveBindings } from "../dist/input-bindings.js";
+import { bindingError, DEFAULT_BINDINGS, keyLabel, movementKeyCodes, resolveBindings } from "../dist/input-bindings.js";
+
+test("only continuous movement can carry across a respawn or arena transition", () => {
+  const binds = resolveBindings({ forward: "ArrowUp", sprint: "ShiftRight", jump: "KeyJ" });
+  assert.deepEqual(movementKeyCodes(binds), new Set([
+    "ArrowUp", "KeyS", "KeyA", "KeyD", "ShiftRight", "ControlLeft", "KeyC",
+  ]));
+});
 
 test("fixed game shortcuts cannot be remapped over movement or combat actions", () => {
   for (const code of ["KeyB", "KeyC", "Tab", "Escape", "MetaLeft", "MetaRight"]) {

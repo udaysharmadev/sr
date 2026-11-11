@@ -24,7 +24,7 @@ import * as T from "./vendor/three.module.js";
 import { MAPS, TRAINING_MAP } from "./maps.js";
 import { listenMouseButtons } from "./mouse-input.js";
 import { movePlayer, resetPlayerMotion, smoothCameraHeight, clampCameraEyeY } from "./movement.js";
-import { keyLabel, resolveBindings } from "./input-bindings.js";
+import { keyLabel, movementKeyCodes, resolveBindings } from "./input-bindings.js";
 import { queueMovementFrame, takeRecentMovementFrames } from './input-queue.js';
 import { nameplateWorldWidth } from './presentation.js';
 import { BADGES } from "./progression.js";
@@ -44,7 +44,7 @@ const text = (parent, tag, value) => {
 const timing = { shot: CHAMBER_MS, reload: CHAMBER_MS };
 
 export function startGame(
-  { container, session = null, queueSession = null, practiceMap = null, settings = {}, onExit, onResults, onWeaponChange, onSettingsChange, onActivityChange, onRoomState, onPerformance },
+  { container, session = null, queueSession = null, practiceMap = null, settings = {}, arenaTransition = null, onExit, onResults, onWeaponChange, onSettingsChange, onActivityChange, onRoomState, onPerformance },
 ) {
   const map = [...MAPS,TRAINING_MAP].find((m) => m.id === (session?.state.arena || session?.state.map || practiceMap)) || MAPS[0],
     practice = !session,
@@ -152,7 +152,8 @@ export function startGame(
   const foes = new Map(),
     ray = new T.Raycaster();
   const binds = resolveBindings(settings.bindings),
-    keys = new Set(),
+    movementKeys = movementKeyCodes(binds),
+    keys = new Set((arenaTransition?.keys ?? []).filter(key => movementKeys.has(key))),
     ctrl = new AbortController(),
     { signal } = ctrl;
   const handle = (node, type, fn, options = {}) =>
@@ -174,7 +175,7 @@ export function startGame(
     paused = false,
     locked = document.pointerLockElement === container,
     wasLocked = document.pointerLockElement === container,
-    denied = false,
+    denied = Boolean(arenaTransition?.fallback),
     scoped = false,
     rightButtonHeld = false,
     last = now(),
@@ -380,7 +381,16 @@ export function startGame(
   let lastArmsStage = -1;
   function applyState(s) {
     if (stopped || !s) return;
-    if (s.arena && s.arena !== map.id) { cleanup(true); onExit?.({preserveRoom:true, preserveAim:true}); return; }
+    if (s.arena && s.arena !== map.id) {
+      const transition = {
+        keys: [...keys].filter(key => movementKeys.has(key)),
+        fallback: denied && !locked,
+        paused,
+      };
+      cleanup(true);
+      onExit?.({ preserveRoom: true, preserveAim: true, arenaTransition: transition });
+      return;
+    }
     const me = s.players.find((q) => q.id === meId);
     if (!me) return;
     const newRound = phase === "warmup" && s.phase === "live";
@@ -395,14 +405,15 @@ export function startGame(
     ping = me.ping || 0;
     if (hadState && !paused && !document.hidden) networkTimings.record(ping);
     const respawn = me.alive && (!lastAlive || hadState && me.life !== p.life);
-    if (lastAlive && !me.alive) { resetInput(); combatAudio?.cancelChamber(); }
+    if (lastAlive && !me.alive) { resetInput(true); combatAudio?.cancelChamber(); }
     lastAlive = me.alive;
     const recovering = needsResync && hadState && !respawn && !newRound;
     const fresh = !hadState || respawn || newRound || needsResync;
     needsResync = false;
     retryAt = 0;
     if (fresh) {
-      resetInput(recovering); meleeAt = throwAt = -Infinity; inspectAt = -3000;
+      resetInput(recovering || respawn || newRound || Boolean(arenaTransition), recovering);
+      meleeAt = throwAt = -Infinity; inspectAt = -3000;
       hurtUntil = 0; blastAt = -Infinity;
       landedAt=-Infinity;landingSpeed=fallSpeed=bobAmount=0;
       seq = Math.max(seq, me.inputSeq || 0);
@@ -581,7 +592,7 @@ export function startGame(
     if (isRetryable(error)) {
       needsResync = true;
       retryAt = now() + recoveryDelay(session?.failures || 1);
-      resetInput(true);
+      resetInput(true, true);
     }
     if (now() - errorAt > 1500) {
       errorAt = now();
@@ -857,12 +868,15 @@ export function startGame(
     if (session) { void command("throw", { seq: ++equipmentSeq, yaw, pitch, holdMs: charge * CHARGE_MS }); return; }
     localGrenades.push({ ...grenadeLaunch({ ...p, yaw, pitch }, charge, map), id: "practice:" + ++equipmentSeq });
   }
-  function resetInput(preserveKeys = false) {
+  function resetInput(keepMovement = false, keepScopeButton = false) {
     if (primeAt !== null && session) void command("cancelprime", {});
     if (primeAt !== null) combatAudio?.cancelPrime();
     primeAt = null; fireHeld = false; pendingKnifeAt = Infinity;
     inspectAt = -3000; lastMouseX = lastMouseY = null;
-    if (!preserveKeys) { keys.clear(); rightButtonHeld = false; }
+    if (keepMovement) {
+      for (const key of keys) if (!movementKeys.has(key)) keys.delete(key);
+    } else keys.clear();
+    if (!keepScopeButton) rightButtonHeld = false;
     lean = 0;
     jump =
       slide =
@@ -1235,7 +1249,13 @@ export function startGame(
       if (!e.repeat) watchedPlayer(e.code === "ArrowRight" ? 1 : -1);
       return;
     }
-    if (!p.alive && !["Tab", "KeyB"].includes(e.code)) return;
+    if (!p.alive && !["Tab", "KeyB"].includes(e.code)) {
+      if (movementKeys.has(e.code)) {
+        e.preventDefault();
+        keys.add(e.code);
+      }
+      return;
+    }
     if (["Digit1", "Digit2", "Digit3"].includes(e.code)) {
       e.preventDefault(); if (!e.repeat) selectEquipment({ Digit1: "rifle", Digit2: "knife", Digit3: "grenade" }[e.code]); return;
     }
@@ -1376,7 +1396,7 @@ export function startGame(
         const self = new T.Vector3(p.x, p.y + p.eyeHeight * .6, p.z).sub(blast), selfDistance = self.length(); self.normalize();
         if (p.alive && blastDamage(selfDistance) && (traceSurface(map, new T.Ray(blast, self))?.distance ?? Infinity) >= selfDistance - .1) {
           damagePlayer(p, blastDamage(selfDistance)); hurtUntil = t + 650;
-          if (p.health === 0) { p.alive = false; p.respawnAt = t + 2000; deaths++; streak = 0; resetInput(); combatAudio?.cancelChamber(); combatAudio?.eliminate(.8); }
+          if (p.health === 0) { p.alive = false; p.respawnAt = t + 2000; deaths++; streak = 0; resetInput(true); combatAudio?.cancelChamber(); combatAudio?.eliminate(.8); }
           else message("Wounded", 700);
         }
         for (const foe of foes.values()) {
@@ -1395,7 +1415,7 @@ export function startGame(
     if (!practice) for (const grenade of visibleGrenades) if (grenade.age >= FUSE_MS / 1000 - .00001) presentBlast(grenade.id, grenade, serverNow() - grenade.createdAt - FUSE_MS);
     equipmentEffects.sync(visibleGrenades.filter(g => g.age < FUSE_MS / 1000 - .00001)); equipmentEffects.update(t);
     if (practice && !paused && !p.alive && t >= p.respawnAt) {
-      resetInput(); meleeAt = throwAt = -Infinity;
+      resetInput(true); meleeAt = throwAt = -Infinity;
       resetPlayerMotion(p,map.spawns[0]);Object.assign(p,{alive:true,health:MAX_HEALTH});
       hurtUntil = 0; blastAt = -Infinity;
       equipmentAt=t;shotAt=-Infinity;kick=zoom=stepDistance=stride=bobAmount=fallSpeed=landingSpeed=0;landedAt=-Infinity;
@@ -1578,8 +1598,9 @@ export function startGame(
     }
     frame = requestAnimationFrame(loop);
   }
-  $(".sr-enter").hidden = locked;
-  if (!locked && navigator.userActivation?.isActive) focusAim();
+  $(".sr-enter").hidden = locked || denied;
+  if (arenaTransition?.paused) pause();
+  else if (!locked && !denied && navigator.userActivation?.isActive) focusAim();
   frame = requestAnimationFrame(loop);
   if(queueSession)stopQueue=watchSession(queueSession,(state)=>{
     if(state.phase==='waiting')return true;

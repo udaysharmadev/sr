@@ -9,6 +9,9 @@ export const CONTROL_BINDINGS = {
 export const DEFAULT_BINDINGS = Object.fromEntries(
   Object.entries(CONTROL_BINDINGS).map(([action, [, code]]) => [action, code]),
 );
+export function movementKeyCodes(binds) {
+  return new Set([binds.forward, binds.backward, binds.left, binds.right, binds.sprint, binds.crouch, "KeyC"]);
+}
 const fixed = { Digit1: "sniper", Digit2: "knife", Digit3: "grenade", KeyB: "loadout", KeyC: "alternate crouch", Tab: "scoreboard",
   Escape: "pause", MetaLeft: "system shortcuts", MetaRight: "system shortcuts" };
 const valid = (code) => typeof code === "string" && /^[A-Za-z][A-Za-z0-9]{0,30}$/.test(code) && code !== "Unidentified";
