@@ -14,8 +14,9 @@ Browser based multiplayer sniper game. The Node server serves the game in `dist/
 2. Create a production Node.js application with Node.js **22.13+**, startup file `app.js`, and the domain or subdomain you want to use. Set the application root to a private directory outside `public_html` when the interface permits it.
 3. Clone `https://github.com/udaysharmadev/sr.git` into that application root, or upload the repository files there. Do not expose `.local/` through a public document root.
 4. Run `npm install` in the application root if cPanel asks for dependencies. This project has no external npm runtime dependencies.
-5. Start or deploy the application from cPanel. Passenger supplies the port; the server listens on `PORT` and serves the complete game from `dist/`.
-6. Open the assigned domain and confirm the landing screen loads. Keep the application root writable so SQLite can create `.local/profiles.sqlite`; back up that directory separately because it contains player profiles, rooms, and social data.
+5. Set `SNIPER_PUBLIC_ORIGIN=https://sr.validussentinel.com` in the application environment. For another domain, use its exact browser origin, including the scheme. This lets room, profile, and friends requests keep their HTTPS origin when Passenger forwards them to Node over HTTP.
+6. Start or restart the application from cPanel. Passenger supplies the port and the server serves the game from `dist/`.
+7. Open the assigned domain, then create and join a private room from two separate browser profiles to verify the room and guest-save APIs. Keep the application root writable so SQLite can create `.local/profiles.sqlite`. Back up that directory separately when updating because it contains player profiles, rooms, and social data.
 
 If the account only offers Node.js 20 or older, ask the host to enable Node.js 22.13+ and Passenger/Application Manager. Static-only hosting will not run the multiplayer APIs. Public rooms currently share one local SQLite-backed process; use a supported persistent database and coordinated multi-process storage before scaling this app across multiple server processes.
 

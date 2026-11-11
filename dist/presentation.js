@@ -1,5 +1,11 @@
 export const COLLAPSE_MS = 1500;
 
+export function nameplateWorldWidth(depth, fov, viewportHeight) {
+  const height = Math.max(1, viewportHeight);
+  const pixels = Math.min(180, height * .22);
+  return Math.min(2, pixels * 2 * Math.max(.01, depth) * Math.tan(fov * Math.PI / 360) / height);
+}
+
 // Practice action deadlines and particles share one clock, frozen by its menu.
 // Online matches leave this clock running, regardless of the local menu.
 export function createPlayClock(read = () => performance.now()) {

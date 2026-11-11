@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { renderQuality, frameTimings } from "../dist/quality.js";
+import {nameplateWorldWidth} from '../dist/presentation.js';
+
+test('nearby player labels stay within a screen-size cap at hipfire and scope FOVs',()=>{
+  for(const height of [360,720,1440])for(const fov of [27,70])for(const depth of [.2,1,3,20]){
+    const width=nameplateWorldWidth(depth,fov,height);
+    const projected=width*height/(2*depth*Math.tan(fov*Math.PI/360));
+    assert.ok(projected<=Math.min(180,height*.22)+1e-8);assert.ok(width<=2);
+  }
+});
 
 test("quality presets cap GPU resolution and shadows without lowering the default visuals", () => {
   const low = renderQuality("low", 2), balanced = renderQuality("balanced", 2), high = renderQuality("high", 2);

@@ -1,3 +1,4 @@
+import {audioLevel} from './audio-levels.js';
 import {activeEvents,EVENTS,eventStatus} from './events.js';
 import {seasonAt,seasonProgress,claimableSeasons,SEASON_CLAIM_GRACE} from './seasons.js';
 import {wardrobeById} from './wardrobe.js';
@@ -64,6 +65,8 @@ const settings = load("sr.settings.v1", {
   sensitivity: 1,
   adsSensitivity: .55,
   volume: .65,
+  musicVolume: 1,
+  effectsVolume: 1,
   shake: .45,
   reticle: 2,
   reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -470,7 +473,7 @@ async function inspect(id = profile.equipped.skins, fromShop = false, trialFinis
 }
 
 function settingValue(key) {
-  return ["volume", "shake"].includes(key) ? Math.round(settings[key] * 100) + "%"
+  return ["volume", "musicVolume", "effectsVolume", "shake"].includes(key) ? Math.round(settings[key] * 100) + "%"
     : key === "reticle" ? settings[key] + "px" : Number(settings[key]).toFixed(2);
 }
 function settingRange(key, name, min, max, step) {
@@ -489,7 +492,7 @@ function settingsView(tab = settingsTab) {
       settingRange("sensitivity", "Mouse sensitivity", .2, 3, .1) + settingRange("adsSensitivity", "Scope sensitivity", .1, 1.5, .05) +
       settingRange("reticle", "Reticle thickness", 1, 4, 1) + settingToggle("invertY", "Invert vertical aim") +
       '</div><aside class="settings-preview"><div class="aim-preview" style="--aim-size:' + settings.reticle + 'px"><div class="sr-center"><i></i><i></i><i></i><i></i><em></em></div></div><span>CROSSHAIR</span></aside>',
-    audio: '<div class="settings-options"><h2>Sound</h2>' + settingRange("volume", "Sound volume", 0, 1, .05) +
+    audio: '<div class="settings-options"><h2>Sound</h2>' + settingRange("volume", "Master volume", 0, 1, .05) + settingRange("musicVolume", "Music", 0, 1, .05) + settingRange("effectsVolume", "Sound effects", 0, 1, .05) +
       '<div class="sound-check"><span>' + icon("sound") + '</span>' + button('Play elimination sound', 'testcue') + '</div></div>' +
       '<aside class="settings-preview audio-preview">' + icon("sound") + '<span>GAME AUDIO</span></aside>',
     video: '<div class="settings-options"><h2>Graphics & motion</h2><div class="quality-choices" aria-label="Graphics quality">' +
@@ -943,7 +946,7 @@ function results(r, active) {
   const replayMap=MAPS.find(m=>m.id===r.mapId||m.name===r.map)?.id||MAPS[0].id;
   const replay=active?button("Next round","rematch","primary"):'<button class="btn primary" data-practice-map="'+escape(replayMap)+'">Play again</button>';
   stopResults(true);
-  roundMusic.configure(initialAudioBuffers?.finale, settings.volume); roundMusic.reveal();
+  roundMusic.configure(initialAudioBuffers?.finale, audioLevel(settings,'music')); roundMusic.reveal();
   show(
     "results", r.practice ? "Range results" : "Match results",
     '<div class="victory-scene"><canvas id="results-stage" aria-label="Match winner lineup"></canvas><div class="victory-title"><span>' + escape(r.map) + ' · ' + escape(r.practice ? 'Practice' : r.mode) + '</span><h2>' + headline + '</h2></div>' +
@@ -1055,9 +1058,9 @@ const actions = {
 };
 let menuAudio, menuOutput, menuCue;
 function menuSound(confirm = false) {
-  roundMusic.configure(initialAudioBuffers?.finale, settings.volume);
+  roundMusic.configure(initialAudioBuffers?.finale, audioLevel(settings,'music'));
   if (settings.volume > 0) roundMusic.unlock();
-  if (!settings.volume) return;
+  if (!audioLevel(settings,'effects')) return;
   try {
     if (!menuAudio) {
       menuAudio = new AudioContext();
@@ -1073,7 +1076,7 @@ function menuSound(confirm = false) {
       confirm ? 980 : 560,
       t + .055,
     );
-    gain.gain.setValueAtTime(settings.volume * .035, t);
+    gain.gain.setValueAtTime(audioLevel(settings,'effects') * .035, t);
     gain.gain.exponentialRampToValueAtTime(.0001, t + .075);
     oscillator.connect(gain);
     gain.connect(menuOutput.input);
@@ -1128,7 +1131,7 @@ document.addEventListener("click", (e) => {
   if (b.dataset.action === "testcue") {
     if (menuAudio && initialAudioBuffers?.elimination) {
       menuCue?.dispose();
-      menuCue = createShotAudio(menuAudio, "", settings.volume, undefined, initialAudioBuffers.elimination, menuOutput.input);
+      menuCue = createShotAudio(menuAudio, "", audioLevel(settings,'effects'), undefined, initialAudioBuffers.elimination, menuOutput.input);
       menuCue.play(COMBAT_CLIPS.elimination.gain);
     }
     return;
@@ -1219,7 +1222,8 @@ content.addEventListener("input", (e) => {
   const el = e.target, key = el.dataset.setting;
   if (!key) return;
   settings[key] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : Number(el.value);
-  if(key === "volume"){menuCue?.dispose();menuCue=null;}
+  if(["volume","effectsVolume"].includes(key)){menuCue?.dispose();menuCue=null;}
+  if(["volume","musicVolume"].includes(key))roundMusic.configure(initialAudioBuffers?.finale,audioLevel(settings,'music'));
   if (key === "quality") stage?.setQuality(settings.quality);
   if (el.nextElementSibling?.tagName === "OUTPUT") {
     el.nextElementSibling.value = settingValue(key);

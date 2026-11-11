@@ -432,7 +432,12 @@ function emit(r, event) {
 }
 function updateObjectives(r, now) {
   if (r.phase !== 'live' || r.settings.mode !== 'ctf' || !r.flags) return;
-  for (const event of updateFlags(r.flags, livePlayers(r), r.scores, now)) {
+  const canReach = (player, flag) => {
+    const origin=[player.x,player.y+.8,player.z],delta=[flag.x-player.x,(flag.y||0)+.6-origin[1],flag.z-player.z];
+    const distance=Math.hypot(...delta);
+    return distance<.001 || wallDistance(arenaFor(r),origin,delta.map(v=>v/distance))>=distance-.02;
+  };
+  for (const event of updateFlags(r.flags, livePlayers(r), r.scores, now, canReach)) {
     if (event.type === 'flag-pickup') {
       const carrier = r.players.find(p => p.id === event.player);
       if (carrier) carrier.shieldUntil = 0;

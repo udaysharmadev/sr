@@ -68,3 +68,37 @@ test('a disconnected CTF carrier drops the flag for its return timer',async()=>{
   assert.equal(r.flags.orange.carrier,null);assert.equal(r.flags.orange.droppedAt,t+10002);
   advance(r,t+25002);assert.equal(r.flags.orange.droppedAt,null);
 });
+
+test('an authoritative sniper kill drops the carried flag without awarding capture points or retaining it on respawn',async()=>{
+  const {newRoom,addPlayer,command,advance}=await import('./rooms.mjs');
+  const t=3000000,r=newRoom('HITFLG',false),host=addPlayer(r,{name:'Carrier'},t);
+  command(r,host.token,{type:'settings',settings:{mode:'ctf',capacity:4}},t);
+  const clients=[host,...Array.from({length:3},(_,i)=>addPlayer(r,{name:'Pilot '+i},t))];
+  for(const c of clients)command(r,c.token,{type:'ready',ready:true},t);
+  command(r,host.token,{type:'start'},t);advance(r,t+10000);
+  const carrier=r.players[0],attacker=r.players[1],time=t+10002;
+  for(const p of r.players)Object.assign(p,{x:-24,z:0,y:0,history:[],shieldUntil:0});
+  Object.assign(carrier,r.flags.orange.home,{shieldUntil:time+1000});
+  advance(r,time);assert.equal(r.flags.orange.carrier,carrier.id);assert.equal(carrier.shieldUntil,0,'flag pickup ends protection');
+  Object.assign(carrier,{x:24,z:18,eyeHeight:1.62});Object.assign(attacker,{x:24,z:20,eyeHeight:1.62});
+  const shot={type:'shoot',seq:1,life:attacker.life,yaw:0,pitch:0};
+  command(r,clients[1].token,shot,time+1);
+  assert.equal(carrier.alive,false);assert.equal(carrier.deaths,1);assert.equal(attacker.kills,1);
+  assert.deepEqual(r.scores,{blue:0,orange:0});assert.equal(r.flags.orange.carrier,null);
+  assert.equal(r.flags.orange.droppedAt,time+1);assert.equal(r.flags.orange.x,24);assert.equal(r.flags.orange.z,18);
+  command(r,clients[1].token,shot,time+2);assert.equal(carrier.deaths,1,'retry cannot kill twice');
+  attacker.x=-24;const life=carrier.life;advance(r,time+2001);
+  assert.equal(carrier.alive,true);assert.equal(carrier.life,life+1);assert.equal(carrier.health,100);
+  assert.notEqual(r.flags.orange.carrier,carrier.id);assert.equal(r.scores.blue,0);
+});
+
+test('a nearby flag cannot be picked up through the actual Crosswind balcony rail',async()=>{
+  const {newRoom,addPlayer,command,advance}=await import('./rooms.mjs');
+  const t=4000000,r=newRoom('RAILQA',false),host=addPlayer(r,{name:'Pilot'},t);
+  command(r,host.token,{type:'settings',settings:{mode:'ctf',capacity:4}},t);
+  r.phase='live';r.endsAt=t+600000;r.flags=createFlags(MAPS[0]);
+  const p=r.players[0];Object.assign(p,{x:1.2,y:3.2,z:4.8,shieldUntil:0});
+  Object.assign(r.flags.orange,{x:2.3,y:3.2,z:4.8,droppedAt:t});
+  advance(r,t+1);assert.equal(r.flags.orange.carrier,null,'rail blocks reach despite 1.1 metre distance');
+  p.x=2.3;advance(r,t+2);assert.equal(r.flags.orange.carrier,p.id,'same-side reach succeeds');
+});

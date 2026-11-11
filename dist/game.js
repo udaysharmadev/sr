@@ -1,3 +1,4 @@
+import {audioLevel} from './audio-levels.js';
 import {armsStage,compareArmsPlayers} from './arms-race.js';
 import { updateWardrobeEffects } from './wardrobe-effects.js';
 import { updateRifleSkinEffects } from './rifle-skin-effects.js';
@@ -25,6 +26,7 @@ import { listenMouseButtons } from "./mouse-input.js";
 import { movePlayer, resetPlayerMotion, smoothCameraHeight, clampCameraEyeY } from "./movement.js";
 import { keyLabel, resolveBindings } from "./input-bindings.js";
 import { queueMovementFrame, takeRecentMovementFrames } from './input-queue.js';
+import { nameplateWorldWidth } from './presentation.js';
 import { BADGES } from "./progression.js";
 import { animateOperator, animateOperatorCombat, buildArena, operator, rifle, setOperatorWeapon } from "./arena.js";
 
@@ -65,6 +67,11 @@ export function startGame(
     <section class="sr-armory" hidden role="dialog" aria-modal="true" aria-label="Match rifle loadout"><div class="sr-armory-panel"><header><h2>RIFLE LOADOUT</h2><button class="sr-armory-back">B · BACK</button></header><canvas class="sr-rifle-preview" aria-label="Rotatable rifle preview"></canvas><div class="sr-rifle-summary"><div><h3></h3><p>ONE SHOT · 1.5s CHAMBER · UNLIMITED</p></div><button class="sr-rifle-equip">EQUIP</button></div><div class="sr-rifle-list"></div><p class="sr-armory-status" role="status"></p></div></section>
     <div class="sr-enter" hidden><button>Click to resume aiming</button></div>`;
   const $ = (s) => root.querySelector(s), canvas = $("canvas");
+  const hudText = (selector, value) => {
+    const node = $(selector);
+    const label = String(value);
+    if (node.textContent !== label) node.textContent = label;
+  };
   const quality = renderQuality(settings.quality, window.devicePixelRatio);
   const timings = frameTimings();
   let skipFrameSample = true;
@@ -137,7 +144,7 @@ export function startGame(
       if (thumbImages[id]) { image.src = thumbImages[id]; image.hidden = false; }
     }
     for (const slot of root.querySelectorAll("[data-slot]")) slot.classList.toggle("active", slot.dataset.slot === selectedEquipment);
-    $("[data-slot=grenade]").textContent = "3 · GRENADE " + grenadeStock;
+    hudText("[data-slot=grenade]", "3 · GRENADE " + grenadeStock);
     $("[data-slot=grenade]").classList.toggle("empty", grenadeStock === 0);
   }
   function equipmentName(id) { return id === "knife" ? "Field knife" : id === "grenade" ? "Frag grenade" : weaponById(id).name; }
@@ -149,8 +156,11 @@ export function startGame(
     { signal } = ctrl;
   const handle = (node, type, fn, options = {}) =>
     node.addEventListener(type, fn, { ...options, signal });
+  let viewportHeight = 1, lastDrawAt = -Infinity;
   const paint = () => {
     const w = root.clientWidth || 1, h = root.clientHeight || 1;
+    viewportHeight = h;
+    lastDrawAt = -Infinity;
     renderer.setSize(w, h, false);
     camera.aspect = viewCam.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -284,7 +294,7 @@ export function startGame(
     g.lineWidth = 7;
     g.strokeStyle = "#1a223d";
     g.strokeText(name.slice(0, 18), 128, 34);
-    g.fillStyle = "#ffb2a4";
+    g.fillStyle = f.friendly ? '#a8d8ff' : '#ffb2a4';
     g.fillText(name.slice(0, 18), 128, 34);
     const badgeTitle = BADGES.find((b) => b.id === badge)?.name;
     if (badgeTitle) {
@@ -293,7 +303,7 @@ export function startGame(
     }
     f.label.material.map.needsUpdate=true;f.label.scale.set(2,badge ? .55 : .375,1);f.name=name;f.badge=badge;
   }
-  function addFoe(id, name, color, weapon, badge, gear) {
+  function addFoe(id, name, color, weapon, badge, gear, friendly = false) {
     const model = operator(scene, color, weapon, gear);
     const tex = new T.CanvasTexture(document.createElement('canvas'));
     tex.colorSpace = T.SRGBColorSpace;
@@ -303,7 +313,7 @@ export function startGame(
     label.position.y = 2.03;
     label.scale.set(2, badge ? .55 : .375, 1);
     model.add(label);
-    const o = { id, name, model, label, gearKey:JSON.stringify(gear), dest: new T.Vector3(), previous: null, until: 0, health: MAX_HEALTH };
+    const o = { id, name, model, label, friendly, gearKey:JSON.stringify(gear), dest: new T.Vector3(), previous: null, until: 0, health: MAX_HEALTH };
     updateFoeLabel(o,name,badge);
     foes.set(id, o);
     return o;
@@ -333,7 +343,7 @@ export function startGame(
     }
   }
   function sound(hz, len, type = "sine", volume = .11, glide = .5) {
-    if (!audio || !settings.volume) return;
+    if (!audio || !audioLevel(settings,'effects')) return;
     const osc = audio.createOscillator(), amp = audio.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(hz, audio.currentTime);
@@ -342,7 +352,7 @@ export function startGame(
       audio.currentTime + len,
     );
     amp.gain.setValueAtTime(
-      Math.max(.0001, volume * settings.volume),
+      Math.max(.0001, volume * audioLevel(settings,'effects')),
       audio.currentTime,
     );
     amp.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + len);
@@ -452,8 +462,8 @@ export function startGame(
       const friend = ["tdm","ctf"].includes(s.settings.mode) && other.team === me.team;
       let f = foes.get(other.id);
       if(f&&f.gearKey!==JSON.stringify(other.gear)){retireActor(f);f=null;}
-      if(!f){f=addFoe(other.id,other.name,friend?0x2779ff:0xf34b54,other.weapon,other.badge,other.gear);f.model.visible=false;}
-      if(f.name!==other.name||f.badge!==other.badge)updateFoeLabel(f,other.name,other.badge);
+      if(!f){f=addFoe(other.id,other.name,friend?0x2779ff:0xf34b54,other.weapon,other.badge,other.gear,friend);f.model.visible=false;}
+      if(f.name!==other.name||f.badge!==other.badge||f.friendly!==friend){f.friendly=friend;updateFoeLabel(f,other.name,other.badge);}
       setOperatorWeapon(f.model, other.weapon,other.finish);
       const equipment = other.equipment || "rifle";
       if (!f.extras) { f.extras = {}; for (const kind of ["knife", "grenade"]) { const item = equipmentModel(f.model, kind); item.position.set(.24, 1.02, -.22); item.scale.setScalar(.7); f.extras[kind] = item; } }
@@ -787,12 +797,12 @@ export function startGame(
   }
   let equipmentNoise = null;
   function equipmentSound(kind) {
-    if (!audio || !audioOutput || settings.volume <= 0) return;
+    if (!audio || !audioOutput || audioLevel(settings,'effects') <= 0) return;
     if (!equipmentNoise) { equipmentNoise = audio.createBuffer(1, Math.ceil(audio.sampleRate * .8), audio.sampleRate); const data = equipmentNoise.getChannelData(0); for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1; }
     const source = audio.createBufferSource(), filter = audio.createBiquadFilter(), gain = audio.createGain();
     source.buffer = equipmentNoise; filter.type = "lowpass"; filter.frequency.value = kind === "blast" ? 650 : 2600;
     const length = kind === "blast" ? .7 : .15, start = audio.currentTime;
-    gain.gain.setValueAtTime(settings.volume * (kind === "blast" ? .65 : .10), start); gain.gain.exponentialRampToValueAtTime(.0001, start + length);
+    gain.gain.setValueAtTime(audioLevel(settings,'effects') * (kind === "blast" ? .65 : .10), start); gain.gain.exponentialRampToValueAtTime(.0001, start + length);
     source.connect(filter); filter.connect(gain); gain.connect(audioOutput.input); source.start(); source.stop(start + length);
     source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
   }
@@ -965,11 +975,13 @@ export function startGame(
   const matchRanges = [
     ["sensitivity", "Mouse sensitivity", .2, 3, .1, 1],
     ["adsSensitivity", "Scope sensitivity", .1, 1.5, .05, .55],
-    ["volume", "Sound volume", 0, 1, .05, .65],
+    ["volume", "Master volume", 0, 1, .05, .65],
+    ["musicVolume", "Music", 0, 1, .05, 1],
+    ["effectsVolume", "Sound effects", 0, 1, .05, 1],
     ["reticle", "Crosshair thickness", 1, 4, 1, 2],
     ["shake", "Camera shake", 0, 1, .05, .45],
   ];
-  const optionValue = (key, value) => ["volume", "shake"].includes(key) ? Math.round(value * 100) + "%" : key === "reticle" ? value + "px" : Number(value).toFixed(2);
+  const optionValue = (key, value) => ["volume", "musicVolume", "effectsVolume", "shake"].includes(key) ? Math.round(value * 100) + "%" : key === "reticle" ? value + "px" : Number(value).toFixed(2);
   function openMatchSettings() {
     pause();
     $(".sr-pause-actions").hidden = true;
@@ -990,7 +1002,7 @@ export function startGame(
   }
   function focusAim() {
     skipFrameSample = true;
-    roundMusic.configure(settings.audioBuffers?.finale, settings.volume);
+    roundMusic.configure(settings.audioBuffers?.finale, audioLevel(settings,'music'));
     roundMusic.unlock();
     setPaused(false);
     showPauseActions();
@@ -1001,7 +1013,7 @@ export function startGame(
       if (!audio && settings.volume > 0) {
         audio = new AudioContext();
         audioOutput = gameAudioOutput(audio);
-        combatAudio = createCombatAudio(audio, settings.audioBuffers, settings.volume, signal, audioOutput.input);
+        combatAudio = createCombatAudio(audio, settings.audioBuffers, audioLevel(settings,'effects'), signal, audioOutput.input);
         void combatAudio.load();
       }
       if (audio?.state === "suspended") void audio.resume().catch(() => {});
@@ -1072,11 +1084,11 @@ export function startGame(
     if (range) input.parentElement.querySelector("output").value = optionValue(key, value);
     if (key === "reticle") root.style.setProperty("--reticle", value + "px");
     if (key === "reducedMotion") root.classList.toggle("reduced-motion", value);
-    if (key === "volume") {
+    if (["volume","effectsVolume"].includes(key)) {
       combatAudio?.dispose();
-      if (audio) { combatAudio = createCombatAudio(audio, settings.audioBuffers, value, signal, audioOutput.input); void combatAudio.load(); }
-      roundMusic.configure(settings.audioBuffers?.finale, value);
+      if (audio) { combatAudio = createCombatAudio(audio, settings.audioBuffers, audioLevel(settings,'effects'), signal, audioOutput.input); void combatAudio.load(); }
     }
+    if (["volume","musicVolume"].includes(key)) roundMusic.configure(settings.audioBuffers?.finale, audioLevel(settings,'music'));
     onSettingsChange?.({ [key]: value });
   });
   handle($(".sr-armory-back"), "click", () => closeLoadout());
@@ -1271,6 +1283,7 @@ export function startGame(
     watchedId = choices[index].id;
     return choices[index];
   }
+  const nameplateDirection = new T.Vector3();
   function loop() {
     if (stopped) return;
     const t = now();
@@ -1478,14 +1491,14 @@ export function startGame(
         : matchDeadline(session.state, serverNow());
       roundMusic.countdown(deadline, !queueSession && (practice || phase === "live"));
       root.classList.toggle("sr-final-seconds", !queueSession && deadline <= 5000 && deadline > 0 && (practice || phase === "live"));
-      $(".sr-clock b").textContent = queueSession ? (queueSession.state.players.filter(player=>!player.spectator).length + " / 15 PLAYERS") : deadline === Infinity && !practice ? 'FIRST TO ' + session.state.settings.targetPoints : clock(deadline);
-      $(".sr-clock strong").textContent = queueSession ? "Practice · matchmaking" : spectating ? "Spectating · " + (watchedPlayer()?.name || "Waiting for players") : phase === "warmup" ? (safelyPublic() ? "PRACTICE AREA · MATCH STARTS IN" : "Match starts in") : mode;
-      $(".sr-ammo b").textContent = selectedEquipment === "knife" ? "" : selectedEquipment === "grenade" ? String(grenadeStock) : "∞";
+      hudText(".sr-clock b", queueSession ? (queueSession.state.players.filter(player=>!player.spectator).length + " / 15 PLAYERS") : deadline === Infinity && !practice ? 'FIRST TO ' + session.state.settings.targetPoints : clock(deadline));
+      hudText(".sr-clock strong", queueSession ? "Practice · matchmaking" : spectating ? "Spectating · " + (watchedPlayer()?.name || "Waiting for players") : phase === "warmup" ? (safelyPublic() ? "PRACTICE AREA · MATCH STARTS IN" : "Match starts in") : mode);
+      hudText(".sr-ammo b", selectedEquipment === "knife" ? "" : selectedEquipment === "grenade" ? grenadeStock : "∞");
       updateEquipmentHUD();
-      $(".sr-ammo small").textContent = selectedEquipment === "rifle"
+      hudText(".sr-ammo small", selectedEquipment === "rifle"
         ? reloadAt ? "CHAMBERING · " + Math.max(0, (reloadAt - t) / 1000).toFixed(1) + "s" : weaponById(weaponId).name.toUpperCase()
-        : selectedEquipment === "knife" ? "FIELD KNIFE" : primeAt !== null ? "RELEASE TO THROW" : "FRAG GRENADE";
-      $(".sr-ammo-readout > span").textContent = selectedEquipment === "grenade" ? primeAt !== null ? Math.round(charge * 100) + "%" : "HOLD LMB" : "";
+        : selectedEquipment === "knife" ? "FIELD KNIFE" : primeAt !== null ? "RELEASE TO THROW" : "FRAG GRENADE");
+      hudText(".sr-ammo-readout > span", selectedEquipment === "grenade" ? primeAt !== null ? Math.round(charge * 100) + "%" : "HOLD LMB" : "");
       $(".sr-chamber").value = selectedEquipment === "rifle" ? reloadAt ? clamp(1 - (reloadAt - t) / CHAMBER_MS, 0, 1) : 1
         : selectedEquipment === "grenade" ? primeAt !== null ? charge : grenadeStock : clamp((t-meleeAt)/KNIFE_MS,0,1);
 
@@ -1498,20 +1511,20 @@ export function startGame(
         message("Connection interrupted", 300);
       }
       updateLiveBoard();
-      $(".sr-rank").textContent =
+      hudText(".sr-rank",
         !practice && session.state.settings.mode === 'ctf'
           ? 'BLUE ' + session.state.scores.blue + ' — ' + session.state.scores.orange + ' ORANGE · FIRST TO 3' + (Object.values(session.state.flags || {}).some(flag => flag.carrier === meId) ? ' · YOU HAVE THE FLAG' : '')
           : !practice && session.state.settings.mode === "tdm"
           ? "BLUE " + session.state.scores.blue + " — " +
             session.state.scores.orange + " ORANGE"
-          : !practice && session.state.settings.mode === 'duel' ? session.state.players.filter(q => !q.spectator).map(q => q.name + ' ' + q.kills).join(' — ') : !practice && session.state.settings.mode === 'arms' ? (()=>{const a=armsStage(p.armsKills);return a.final?'FINAL · KNIFE':a.name.toUpperCase()+' · '+a.progress+' / '+a.target;})() : "";
-      $(".sr-ping").textContent = practice ? "PRACTICE" : ping + " ms";
+          : !practice && session.state.settings.mode === 'duel' ? session.state.players.filter(q => !q.spectator).map(q => q.name + ' ' + q.kills).join(' — ') : !practice && session.state.settings.mode === 'arms' ? (()=>{const a=armsStage(p.armsKills);return a.final?'FINAL · KNIFE':a.name.toUpperCase()+' · '+a.progress+' / '+a.target;})() : "");
+      hudText(".sr-ping", practice ? "PRACTICE" : ping + " ms");
       if (infoUntil < t) {
-        $(".sr-status").textContent = (!practice && p.shieldUntil > serverNow())
+        hudText(".sr-status", (!practice && p.shieldUntil > serverNow())
           ? "Spawn protection"
-          : "";
+          : "");
       }
-      if (toastUntil < t) $(".sr-toast").textContent = "";
+      if (toastUntil < t) hudText(".sr-toast", "");
       if (!$(".sr-board").hidden) board();
       hint.style.opacity = t > hintUntil && (elapsed > 22000 || (!practice && shots > 3))
         ? "0"
@@ -1519,10 +1532,19 @@ export function startGame(
     }
     updateRifleSkinEffects(gun,t,{quality:settings.quality,reducedMotion:settings.reducedMotion,hidden:zoom>.6||!p.alive});
     muzzleEffects.update(t, zoom > .75);
-    renderer.clear();
-    renderer.render(scene, camera);
-    renderer.clearDepth();
-    renderer.render(view, viewCam);
+    if (!paused || t - lastDrawAt >= 1000 / 15) {
+      lastDrawAt = t;
+      camera.getWorldDirection(nameplateDirection);
+      for (const f of foes.values()) {
+        const depth=(f.model.position.x-camera.position.x)*nameplateDirection.x+(f.model.position.y+2.03*f.model.scale.y-camera.position.y)*nameplateDirection.y+(f.model.position.z-camera.position.z)*nameplateDirection.z;
+        const width=nameplateWorldWidth(depth,camera.fov,viewportHeight);
+        f.label.scale.set(width,width*(f.badge?.length ? .275 : .1875),1);
+      }
+      renderer.clear();
+      renderer.render(scene, camera);
+      renderer.clearDepth();
+      renderer.render(view, viewCam);
+    }
     frame = requestAnimationFrame(loop);
   }
   $(".sr-enter").hidden = locked;

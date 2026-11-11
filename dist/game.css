@@ -331,6 +331,8 @@
   color: #c4c3c0;
 }
 .sr-dialog { width: min(380px, 85%); border: 0; border-radius: 0; background: none; box-shadow: none; text-align: left; padding: 0; }
+.sr-dialog { max-height:88vh;overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain; }
+.sr-dialog::-webkit-scrollbar { display:none; }
 .sr-dialog h2, .sr-board h2 {
   font: italic 800 clamp(24px, 3.5vw, 43px)/1 Rush, Arial, sans-serif;
   margin: 0.35em 0;

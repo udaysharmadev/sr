@@ -8,6 +8,12 @@ import {localProfileStore} from './backend/local-profile-store.mjs';
 import {socialApi} from './backend/social.mjs';
 
 const root = fileURLToPath(new URL("./dist/", import.meta.url));
+const configuredOrigin = process.env.SNIPER_PUBLIC_ORIGIN;
+const publicOrigin = configuredOrigin ? new URL(configuredOrigin) : null;
+if (publicOrigin && (!['http:', 'https:'].includes(publicOrigin.protocol) ||
+  ![publicOrigin.origin, publicOrigin.origin + "/"].includes(configuredOrigin))) {
+  throw new Error("SNIPER_PUBLIC_ORIGIN must be a complete HTTP or HTTPS origin.");
+}
 const savedProfiles=await localProfileStore(),roomStore=savedProfiles.rooms;
 const api = roomApi(roomStore,Date.now,request=>resolveGuestProfile(savedProfiles.store,request));
 const profiles=profileApi(savedProfiles.store,Date.now,roomStore);
@@ -29,7 +35,8 @@ const mime = {
 };
 const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url, "http://" + req.headers.host);
+    const requestOrigin = publicOrigin?.origin || "http://" + req.headers.host;
+    const url = new URL(req.url, requestOrigin);
     if (["/api/rooms","/api/profile","/api/social"].includes(url.pathname)) {
       const chunks = [];
       let bytes = 0;
@@ -41,7 +48,11 @@ const server = http.createServer(async (req, res) => {
         }
         chunks.push(chunk);
       }
-      const input = new Request(url, {
+      // The browser sees the public HTTPS origin even when Passenger forwards HTTP.
+      const apiUrl = new URL(requestOrigin);
+      apiUrl.pathname = url.pathname;
+      apiUrl.search = url.search;
+      const input = new Request(apiUrl, {
         method: req.method,
         headers: req.headers,
         ...(["GET", "HEAD"].includes(req.method)

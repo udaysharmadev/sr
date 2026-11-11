@@ -23,7 +23,7 @@ export function dropFlags(flags, player, now) {
 }
 
 // Events describe completed state changes; caller handles score limit and broadcasts.
-export function updateFlags(flags, players, scores, now) {
+export function updateFlags(flags, players, scores, now, canReach = () => true) {
   const events=[];
   const active=players.filter(p=>p.alive && !p.spectator && teams.includes(p.team));
   for (const team of teams) {
@@ -38,13 +38,13 @@ export function updateFlags(flags, players, scores, now) {
   }
   for (const p of active) {
     const own=flags[p.team], enemy=flags[otherTeam(p.team)];
-    if (!own.carrier && own.droppedAt !== null && nearby(p,own)) {
+    if (!own.carrier && own.droppedAt !== null && nearby(p,own) && canReach(p,own)) {
       homeFlag(own);events.push({type:'flag-return',team:p.team,player:p.id});
     }
-    if (!enemy.carrier && nearby(p,enemy)) {
+    if (!enemy.carrier && nearby(p,enemy) && canReach(p,enemy)) {
       enemy.carrier=p.id;enemy.droppedAt=null;events.push({type:'flag-pickup',team:otherTeam(p.team),player:p.id});
     }
-    if (enemy.carrier===p.id && !own.carrier && own.droppedAt===null && nearby(p,own.home)) {
+    if (enemy.carrier===p.id && !own.carrier && own.droppedAt===null && nearby(p,own.home) && canReach(p,own.home)) {
       scores[p.team]=(scores[p.team] || 0)+1;homeFlag(enemy);
       events.push({type:'flag-capture',team:p.team,player:p.id});
     }

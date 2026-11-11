@@ -1,3 +1,4 @@
+import {batchStaticMeshes} from './static-meshes.js';
 import * as T from './vendor/three.module.js';
 import {wardrobeById} from './wardrobe.js';
 import {applyFabric} from './surface-textures.js';
@@ -84,6 +85,7 @@ function pieces(item){
    else{for(const x of [-.055,.055])box(foot,.09,.045,.09,accent,x,.04,.145);for(let i=0;i<3;i++)box(foot,.19,.025,.03,accent,0,.07+i*.04,.055);}
   }
  }
+ for(const group of result)batchStaticMeshes(group);
  return result;
 }
 
