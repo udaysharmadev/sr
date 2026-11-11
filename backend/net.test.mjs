@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MemoryStore, roomApi } from "./api.mjs";
-import { createPrivate, joinPublic, resumeSession, isRetryable, isSessionExpired, recoveryDelay, estimatedServerTime } from "../dist/net.js";
+import { createPrivate, joinPublic, resumeSession, isRetryable, isSessionExpired, matchResponseTimeout, recoveryDelay, estimatedServerTime } from "../dist/net.js";
 
 async function withNetwork(run) {
   const original = { fetch: globalThis.fetch, sessionStorage: globalThis.sessionStorage, localStorage: globalThis.localStorage, performance:globalThis.performance };
@@ -112,6 +112,20 @@ test("transport reports busy while a request is in flight and while another is q
   hold.release();
   await Promise.all([pending, next]);
   assert.equal(session.busy, false);
+  await session.leave();
+}));
+test("active match requests time out sooner, with extra time for a slow measured RTT", t => withNetwork(async ({ latency }) => {
+  const timeout = t.mock.method(AbortSignal, "timeout");
+  const session = await createPrivate("Timeout QA");
+  assert.equal(timeout.mock.calls.at(-1).arguments[0], 3500);
+  latency(400);
+  await session.refresh({ match: true });
+  assert.equal(timeout.mock.calls.at(-1).arguments[0], 1000);
+  await session.action("input", { seq: 1, frames: [] }, { match: true });
+  assert.equal(timeout.mock.calls.at(-1).arguments[0], 1450);
+  await session.refresh();
+  assert.equal(timeout.mock.calls.at(-1).arguments[0], 3500);
+  assert.equal(matchResponseTimeout(2000), 3500);
   await session.leave();
 }));
 test('stale queued combat and input expire locally without reaching authority or replaying after reconnect',()=>withNetwork(async({calls,tick})=>{

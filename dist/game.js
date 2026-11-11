@@ -16,7 +16,7 @@ import { studioEnvironment } from "./lighting.js";
 import { canChangeWeapon, CHAMBER_MS, weaponById, WEAPONS } from "./weapons.js";
 import { disposeRifle, setRifleFinish } from "./rifle-models.js";
 import { createWeaponPreview, fillRifleThumbnails, rifleThumbnails } from "./weapon-preview.js";
-import { isRetryable, isSessionExpired, recoveryDelay, watchSession, estimatedServerTime } from "./net.js";
+import { isRetryable, isSessionExpired, matchResponseTimeout, recoveryDelay, watchSession, estimatedServerTime } from "./net.js";
 import { frameTimings, QUALITY_CHOICES, renderQuality } from "./quality.js";
 import { spectatorView } from "./spectator.js";
 import { gameAudioOutput } from "./platform-audio.js";
@@ -571,7 +571,7 @@ export function startGame(
   async function command(type, data) {
     try {
       if(["shoot","melee","prime","throw"].includes(type)&&frames.length&&!needsResync) data={...data,input:takeInputBatch()};
-      const state = await session.action(type, { ...data, life: p.life });
+      const state = await session.action(type, { ...data, life: p.life }, { match: true });
       applyState(state || session.state);
     } catch (e) {
       connectionError(e);
@@ -582,6 +582,13 @@ export function startGame(
     if(batch.frames.length){pending.push(batch);if(pending.length>12)pending.shift();}
     return batch;
   }
+  function beginResync() {
+    if (needsResync) return;
+    needsResync = true;
+    frames.length = 0;
+    infoUntil = 0;
+    resetInput(true, true);
+  }
   function connectionError(error) {
     if (stopped) return;
     if (isSessionExpired(error)) {
@@ -590,13 +597,11 @@ export function startGame(
       return;
     }
     if (isRetryable(error)) {
-      needsResync = true;
+      beginResync();
       retryAt = now() + recoveryDelay(session?.failures || 1);
-      resetInput(true, true);
-    }
-    if (now() - errorAt > 1500) {
+    } else if (now() - errorAt > 1500) {
       errorAt = now();
-      message(isRetryable(error) ? "Reconnecting…" : error.message, 2100);
+      message(error.message, 2100);
     }
   }
   function network(t) {
@@ -606,7 +611,7 @@ export function startGame(
     waiting = true;
     if (frames.length && !needsResync) {
       void command("input", takeInputBatch()).finally(() => waiting = false);
-    } else {void session.refresh().then((s) => applyState(s || session.state))
+    } else {void session.refresh({ match: true }).then((s) => applyState(s || session.state))
         .catch(connectionError).finally(() => waiting = false);}
   }
   function rowData() {
@@ -725,7 +730,7 @@ export function startGame(
     onResults?.(data);
   }
   function reload() {
-    if (!p.alive || reloadAt || ammo >= 1) return;
+    if (!p.alive || needsResync || reloadAt || ammo >= 1) return;
     inspectAt = -3000;
     reloadAt = now() + timing.reload;
     combatAudio?.chamber(weaponId);
@@ -1339,6 +1344,7 @@ export function startGame(
   function loop() {
     if (stopped) return;
     const t = now();
+    if (session && !paused && !document.hidden && t - lastSync >= matchResponseTimeout(ping)) beginResync();
     if (!skipFrameSample && !paused && !document.hidden && (locked || denied)) timings.record(t - last);
     skipFrameSample = false;
     const dt = practice && paused ? 0 : clamp((t - last) / 1000, .001, .05);
@@ -1430,7 +1436,7 @@ export function startGame(
       lastActivity = playing;
       onActivityChange?.(playing);
     }
-    if (active || session) {
+    if (active || session && !needsResync) {
       const down = (k) => active && keys.has(binds[k]),
         input = {
           forward: Number(down("forward")) - Number(down("backward")),
@@ -1559,9 +1565,6 @@ export function startGame(
         $(".sr-respawn").textContent = "Eliminated · respawn in " +
           Math.max(0, (p.respawnAt - (practice ? t : serverNow())) / 1000).toFixed(1) + "s";
       }
-      if (!practice && lastSync + 3000 < t) {
-        message("Connection interrupted", 300);
-      }
       updateLiveBoard();
       hudText(".sr-rank",
         !practice && session.state.settings.mode === 'ctf'
@@ -1571,7 +1574,9 @@ export function startGame(
             session.state.scores.orange + " ORANGE"
           : !practice && session.state.settings.mode === 'duel' ? session.state.players.filter(q => !q.spectator).map(q => q.name + ' ' + q.kills).join(' — ') : !practice && session.state.settings.mode === 'arms' ? (()=>{const a=armsStage(p.armsKills);return a.final?'FINAL · KNIFE':a.name.toUpperCase()+' · '+a.progress+' / '+a.target;})() : "");
       hudText(".sr-ping", practice ? "PRACTICE" : ping + " ms");
-      if (infoUntil < t) {
+      if (needsResync) {
+        hudText(".sr-status", "Reconnecting…");
+      } else if (infoUntil < t) {
         hudText(".sr-status", (!practice && p.shieldUntil > serverNow())
           ? "Spawn protection"
           : "");

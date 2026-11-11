@@ -10,6 +10,7 @@ export function estimatedServerTime(state, at = performance.now()) {
 export const isSessionExpired = (error) => [401, 403, 404].includes(error?.status);
 export const isRetryable = (error) => !error?.status || [408, 429].includes(error.status) || error.status >= 500;
 export const recoveryDelay = (attempt) => Math.min(3000, 250 * 2 ** Math.min(4, Math.max(0, attempt - 1)));
+export const matchResponseTimeout = (ping) => Math.min(3500, Math.max(1000, (ping || 0) * 3 + 250));
 
 // Matchmaking must keep its heartbeat while the local practice clock is paused.
 export function watchSession(session, onState, onError, timers = globalThis) {
@@ -73,7 +74,7 @@ function guestDevice() {
     return "";
   }
 }
-async function request(body, token, keepalive = false) {
+async function request(body, token, keepalive = false, timeout = 3500) {
   const started = performance.now();
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = "Bearer " + token;
@@ -82,7 +83,7 @@ async function request(body, token, keepalive = false) {
     headers,
     body: JSON.stringify({...body,wire:1}),
     keepalive,
-    signal: AbortSignal.timeout(3500),
+    signal: AbortSignal.timeout(timeout),
   });
   let result;
   try {
@@ -103,7 +104,7 @@ function attachSession(session) {
   session.failures = 0;
   Object.defineProperty(session, "busy", { get: () => queued > 0 });
   saveSession(session);
-  session.action = (type, data = {}) => {
+  session.action = (type, data = {}, { match = false } = {}) => {
     const enqueued = performance.now(), realtime = realtimeActions.has(type), enqueuedEpoch = epoch;
     if (realtime && queued >= 8) {
       epoch++;
@@ -123,7 +124,7 @@ function attachSession(session) {
           ping: session.ping,
           code: session.code,
           eventAfter: session.state.eventId,
-        }, session.token);
+        }, session.token, false, match ? matchResponseTimeout(session.ping) : undefined);
       } catch (error) {
         if (isRetryable(error)) {session.failures++;epoch++;}
         if (isSessionExpired(error)) clearSaved(session);
@@ -141,7 +142,7 @@ function attachSession(session) {
     pending = response.then(() => {queued--;}, () => {queued--;});
     return response;
   };
-  session.refresh = () => session.action("refresh");
+  session.refresh = (options) => session.action("refresh", {}, options);
   session.leave = async () => {
     if (closed) return;
     closed = true;
